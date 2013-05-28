@@ -61,7 +61,8 @@ CHIP CPU {
     ARegister(in=Ainp, load=Aload, out=Aout, out[0..14]=addressM);
 
     //D register
-    DRegister(in=ALU, load=instruction[4], out=Dout);
+    And(a=instruction[4], b=Cinst, out=Dload);
+    DRegister(in=ALU, load=Dload, out=Dout);
 
     PC(in=Aout, reset=reset, inc=true, load=jump,
        out[0..14]=pc);

@@ -42,7 +42,7 @@ CHIP CPU {
     // Decodes instruction by opcode
     DMux(in=true, sel=instruction[15], a=Ainst, b=Cinst);
 
-    And(a=true, b=instruction[3], out=writeM);
+    And(a=Cinst, b=instruction[3], out=writeM);
 
     // jump calculation
     And(a=instruction[2], b=ng, out=jterm1);
@@ -67,7 +67,7 @@ CHIP CPU {
        out[0..14]=pc);
 
     Mux16(a=Aout, b=inM, sel=instruction[12], out=x);
-    ALU(x=x, y=Dout, zx=instruction[11], nx=instruction[10],
+    ALU(x=Dout, y=x, zx=instruction[11], nx=instruction[10],
         zy=instruction[9], ny=instruction[8], 
         f=instruction[7], no=instruction[6],
         out=ALU, out=outM, zr=zr, ng=ng);

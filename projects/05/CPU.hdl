@@ -39,5 +39,26 @@ CHIP CPU {
         pc[15];          // address of next instruction
 
     PARTS:
-    // Put your code here:
+    // Decodes instruction by opcode
+    DMux(in=true, sel=instruction[15], a=Ainst, b=Cinst);
+
+    // jump calculation
+    And(a=Cinst[2], b=ng, out=j1);
+    And(a=Cinst[1], b=zr, out=j2);
+    Not(in=zr, out=notzr);
+    Not(in=ng, out=notng);
+    Or(a=notzr, b=notng, out=j3a);
+    Not(in=j3a, out=j3b);
+    And(a=Cinst[0], b=j3b, out=j3);
+    Or8Way(in[0]=j1, in[1]=j2, in[2]=j3, in[3..7]=false, out=jump);
+
+    //A-register
+    Or(a=Ainst, b=Cinst[5], out=Aload);
+    Mux16(a=ALU, b=instruction, sel=Ainst, out=Ainp);
+    Register(in=Ainp, load=Aload, out=Aout);
+
+    PC(in=Aout, reset=reset, inc=true, load=jump, out[0..14]=pc);
+
+    ALU(x=, y=, zx=, nx=, zy=, ny=, f=, no=,
+        out=ALU, zr=zr, ng=ng);
 }

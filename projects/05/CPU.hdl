@@ -40,25 +40,35 @@ CHIP CPU {
 
     PARTS:
     // Decodes instruction by opcode
-    DMux(in=true, sel=instruction[15], a=Ainst, b=Cinst);
+    DMux(in=true, sel=instruction[15], a=Ainst, b=Cinst, 
+         b[12]=Cinst_a, 
+         b[11]=c1, b[10]=c2, b[9]=c3, b[8]=c4, b[7]=c5, b[6]=c6,
+         b[5]=d1, b[4]=d2, b[3]=writeM,
+         b[2]=j1, b[1]=j2, b[0]=j3);
 
     // jump calculation
-    And(a=Cinst[2], b=ng, out=j1);
-    And(a=Cinst[1], b=zr, out=j2);
+    And(a=j1, b=ng, out=jterm1);
+    And(a=j2, b=zr, out=jterm2);
     Not(in=zr, out=notzr);
     Not(in=ng, out=notng);
-    Or(a=notzr, b=notng, out=j3a);
-    Not(in=j3a, out=j3b);
-    And(a=Cinst[0], b=j3b, out=j3);
-    Or8Way(in[0]=j1, in[1]=j2, in[2]=j3, in[3..7]=false, out=jump);
+    Or(a=notzr, b=notng, out=jterm3a);
+    Not(in=jterm3a, out=jterm3b);
+    And(a=j3, b=jterm3b, out=jterm3);
+    Or8Way(in[0]=jterm1, in[1]=jterm2, in[2]=jterm3,
+           in[3..7]=false, out=jump);
 
     //A-register
-    Or(a=Ainst, b=Cinst[5], out=Aload);
+    Or(a=Ainst, b=d1, out=Aload);
     Mux16(a=ALU, b=instruction, sel=Ainst, out=Ainp);
     Register(in=Ainp, load=Aload, out=Aout);
 
-    PC(in=Aout, reset=reset, inc=true, load=jump, out[0..14]=pc);
+    //D register
+    Register(in=ALU, load=d2, out=Dout);
 
-    ALU(x=, y=, zx=, nx=, zy=, ny=, f=, no=,
-        out=ALU, zr=zr, ng=ng);
+    PC(in=Aout, reset=reset, inc=true, load=jump,
+       out[0..14]=pc, out[1..14]=addressM);
+
+    Mux16(a=Aout, b=inM, sel=Cinst_a, out=x);
+    ALU(x=x, y=Dout, zx=c1, nx=c2, zy=c3, ny=c4, f=c5, no=c6,
+        out=ALU, out=outM, zr=zr, ng=ng);
 }

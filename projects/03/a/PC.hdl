@@ -16,6 +16,15 @@ CHIP PC {
     OUT out[16];
 
     PARTS:
+    // Text seemed to be hinting to use an ALU here, but that seems really
+    // heavy duty. I'm just using a mux and an adder.
+    Add16(a=rout, b[1..15]=false, b[0]=true, out=add16);
+    Mux8Way16(a=false, b=add16, c=in, d=in,
+              e=false, f=false, g=false, h=false,
+              sel[0]=inc, sel[1]=load, sel[2]=reset,
+              out=muxout);
+    Or8Way(in[0]=reset, in[1]=load, in[2]=inc, in[3..7]=false,out=ld);
+    Register(in=muxout, load=ld, out=out, out=rout);
     // Put your code here:
 }
 

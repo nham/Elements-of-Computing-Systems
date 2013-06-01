@@ -3,7 +3,7 @@ import sys, re
 class AssemblerException(Exception):
     pass
 
-#lookups
+### lookups ###
 
 destlookup = {
         'M':   '001',
@@ -54,32 +54,47 @@ jumplookup = {
         'JMP': '111'}
 
 
-symbol_table = {
-    'SP':     0,
-    'LCL':    1,
-    'ARG':    2,
-    'THIS':   3,
-    'THAT':   4,
-    'R0':     0,
-    'R1':     1,
-    'R2':     2,
-    'R3':     3,
-    'R4':     4,
-    'R5':     5,
-    'R6':     6,
-    'R7':     7,
-    'R8':     8,
-    'R9':     9,
-    'R10':   10,
-    'R11':   11,
-    'R12':   12,
-    'R13':   13,
-    'R14':   14,
-    'R15':   15,
-    'SCREEN': 16384,
-    'KBD': 24576}
+class SymbolTable:
+    def __init__(self):
+        self.tab = {
+            'SP':     0,
+            'LCL':    1,
+            'ARG':    2,
+            'THIS':   3,
+            'THAT':   4,
+            'R0':     0,
+            'R1':     1,
+            'R2':     2,
+            'R3':     3,
+            'R4':     4,
+            'R5':     5,
+            'R6':     6,
+            'R7':     7,
+            'R8':     8,
+            'R9':     9,
+            'R10':   10,
+            'R11':   11,
+            'R12':   12,
+            'R13':   13,
+            'R14':   14,
+            'R15':   15,
+            'SCREEN': 16384,
+            'kbd': 24576}
 
+    def setEntry(self, symbol, address):
+        self.tab[symbol] = address
 
+    def contains(self, symbol):
+        return symbol in self.tab
+
+    def getAddress(self, symbol):
+        return self.tab[symbol]
+
+    def __iter__(self):
+        for sym in self.tab:
+            yield sym
+
+# next address to use for variable symbol
 varsym_mem = 16
 
 
@@ -89,43 +104,34 @@ def is_symbol(string):
 
 def tokenize_line(line):
     tokens = []
-    nexttok = ''
-    if len(line) > 1 and line[0:2] == '//':
-        return False
-        
+    currtok = ''
+    end = len(line) - 1
 
-    for c in line:
-        if c in [' ', '\t', '\n']:
+    if '//' in line:
+        end = line.index('//')
+
+    for c in line[:end]:
+        if c in [' ', '\t']:
             pass
-
-        elif c == '/':
-            if nexttok == '/':
-                nexttok = ''
-                break
-            elif nexttok != '':
-                tokens.append(nexttok)
-                nexttok = c
-
         elif c in ['@', '=', ';', '(', ')']:
-            if nexttok != '':
-                tokens.append(nexttok)
+            if currtok != '':
+                tokens.append(currtok)
 
             tokens.append(c)
-            nexttok = ''
-
+            currtok = ''
         else:
-            nexttok += c
+            currtok += c
 
-    if nexttok != '':
-        tokens.append(nexttok)
+    if currtok != '':
+        tokens.append(currtok)
 
     if len(tokens) == 0:
         return False
 
-    print(tokens)
     return tokens
 
-def translate_A(mnem):
+
+def translate_A(mnem, syms):
     global varsym_mem
 
     if len(mnem) != 2:
@@ -139,11 +145,11 @@ def translate_A(mnem):
         addr = constant
 
     else:
-        if mnem[1] in symbol_table:
-            addr = symbol_table[mnem[1]]
+        if syms.contains(mnem[1]):
+            addr = syms.getAddress(mnem[1])
         else:
             addr = varsym_mem
-            symbol_table[mnem[1]] = addr
+            syms.setEntry(mnem[1], addr)
             varsym_mem += 1
 
     return "{0:016b}".format(addr)
@@ -200,7 +206,7 @@ def translate_C(mnem):
 
 
 
-def translate(mnem):
+def translate(mnem, syms):
     tokoff = 0
 
     if len(mnem) > 5:
@@ -208,7 +214,7 @@ def translate(mnem):
 
     try:
         if mnem[0] == '@':
-            binary = translate_A(mnem)
+            binary = translate_A(mnem, syms)
         else:
             binary = translate_C(mnem)
     except AssemblerException as e:
@@ -217,6 +223,7 @@ def translate(mnem):
 
     return binary
 
+
 def is_label_sym_def(parse):
     if len(parse) == 3:
         if parse[0] == '(' and parse[2] == ')':
@@ -224,52 +231,51 @@ def is_label_sym_def(parse):
                 return True
     return False
 
-def parse_file(fname):
+
+def read_and_tokenize(fname, syms):
     f = open(fname, 'r')
     commands = []
     icount = -1
     for line in f:
-        parse = tokenize_line(line)
-        if parse != False:
-            if is_label_sym_def(parse):
-                if parse[1] not in symbol_table:
-                    symbol_table[parse[1]] = -1
+        tokens = tokenize_line(line)
+        if tokens != False:
+            if is_label_sym_def(tokens):
+                if not syms.contains(tokens[1]):
+                    syms.setEntry(tokens[1], -1)
                 else:
                     raise AssemblerException('Trying to define label twice')
-
             else:
                 icount += 1
-                commands.append(parse)
+                commands.append(tokens)
 
-                for sym in symbol_table:
-                    if symbol_table[sym] == -1:
-                        symbol_table[sym] = icount
+                for sym in syms:
+                    if syms.getAddress(sym) == -1:
+                        syms.setEntry(sym, icount)
     f.close()
+    return commands
 
 
-    icount = 0
+
+def doTheThings(fname):
+    symtab = SymbolTable()
+    commands = read_and_tokenize(fname, symtab)
+
+    i = 0
 
     f = open(fname[:fname.index('.')] + '.hack', 'w')
     for cmd in commands:
         try:
-            tr = translate(cmd)
+            tr = translate(cmd, symtab)
             f.write(tr + '\n')
             #print(tr)
-            icount += 1
+            i += 1
         except AssemblerException as e:
-            print('\nTranslation error on instruction '+str(icount)+': \n'+str(e))
+            print('\nTranslation error on instruction '+str(i)+': \n'+str(e))
             break
 
     f.close()
 
-    return
-
-
 
 if __name__ == "__main__":
     if len(sys.argv) == 2:
-        parse_file(sys.argv[1])
-
-# The full process should be:
-#  1. tokenize
-#  2. pull out label symbols into table
+        doTheThings(sys.argv[1])

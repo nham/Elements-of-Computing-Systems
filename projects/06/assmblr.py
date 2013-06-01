@@ -1,5 +1,8 @@
 import sys
 
+class AssemblerException(Exception):
+    pass
+
 def tokenize_line(line):
     tokens = []
     nexttok = ''
@@ -21,7 +24,8 @@ def tokenize_line(line):
         else:
             nexttok += c
 
-    tokens.append(nexttok)
+    if nexttok != '':
+        tokens.append(nexttok)
 
     if len(tokens) == 0:
         return False
@@ -35,14 +39,14 @@ def translate(mnem):
     tokoff = 0
 
     if len(mnem) > 5:
-        raise Exception('Mnemonic too long: it can\'t exceed 5 tokens')
+        raise AssemblerException('Mnemonic too long: it can\'t exceed 5 tokens')
 
     if mnem[0] == '@':
         binary = "{0:016b}".format(int(''.join(mnem[1:])))
     else:
         if '=' in mnem:
             if mnem[1] != '=' or '=' in mnem[2:]:
-                raise Exception('"=" is misplaced')
+                raise AssemblerException('"=" is misplaced')
 
             # so theres a destination. translate it
             destlookup = {
@@ -56,7 +60,7 @@ def translate(mnem):
             try:
                 dest = destlookup[ mnem[0] ]
             except KeyError:
-                raise Exception('invalid destination')
+                raise AssemblerException('invalid destination')
 
             tokoff = 2
 
@@ -65,10 +69,67 @@ def translate(mnem):
 
         try:
             comptoken = mnem[tokoff]
-        except IndexError:
-            raise Exception('Missing computation section')
 
-        print(' -- '+dest)
+        except IndexError:
+            raise AssemblerException('Missing computation section')
+
+        try:
+            complookup = {
+                '0':   '0101010',
+                '1':   '0111111',
+                '-1':  '0111010',
+                'D':   '0001100',
+                'A':   '0110000',
+                'M':   '1110000',
+                '!D':  '0001101',
+                '!A':  '0110001',
+                '!M':  '1110001',
+                '-D':  '0001111',
+                '-A':  '0110011',
+                '-M':  '0110011',
+                'D+1': '0011111',
+                'A+1': '0110111',
+                'M+1': '1110111',
+                'D-1': '0001110',
+                'A-1': '0110010',
+                'M-1': '1110010',
+                'D+A': '0000010',
+                'D+M': '1000010',
+                'D-A': '0010011',
+                'D-M': '1010011',
+                'A-D': '0000111',
+                'M-D': '1000111',
+                'D&A': '0000000',
+                'D&M': '1000000',
+                'D|A': '0010101',
+                'D|M': '1010101'}
+            comp = complookup[comptoken]
+        except ValueError:
+            raise AssemblerException('Invalid computation')
+
+        if len(mnem) > tokoff+1:
+            if mnem[tokoff+1] != ';':
+                raise AssemblerException('Invalid mnemonic following computation')
+
+            jumptoken = mnem[tokoff+2]
+
+            jumplookup = {
+                    'JGT': '001',
+                    'JEQ': '010',
+                    'JGE': '011',
+                    'JLT': '100',
+                    'JNE': '101',
+                    'JLE': '110',
+                    'JMP': '111'}
+            try:
+                jump = jumplookup[jumptoken]
+            except KeyError:
+                raise AssemblerException('invalid jump')
+        else:
+            jump = '000'
+
+
+        binary = '111'+comp+dest+jump
 
 
 
@@ -85,11 +146,20 @@ def parse_file(fname):
                 tr = translate(parse)
                 bininsts.append(tr)
                 print(tr)
-            except Exception as e:
+            except AssemblerException as e:
                 print('\nTranslation error on line '+str(ln)+': \n'+str(e))
                 break
 
         ln += 1
+
+    f.close()
+
+    print(fname.index('.'))
+    f = open(fname[:fname.index('.')] + '.hack', 'w')
+    f.write('\n'.join(bininsts) + '\n')
+    f.close()
+
+    return bininsts
 
 
 

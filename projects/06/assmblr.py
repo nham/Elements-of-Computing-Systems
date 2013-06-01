@@ -53,6 +53,13 @@ jumplookup = {
         'JLE': '110',
         'JMP': '111'}
 
+
+symbol_table = {}
+
+def is_symbol(string):
+    return re.match('[a-zA-Z_.$][a-zA-Z0-9_.$]*', string) != None
+
+
 def tokenize_line(line):
     tokens = []
     nexttok = ''
@@ -100,12 +107,16 @@ def translate_A(mnem):
         constant = int(mnem[1])
         if constant < 0:
             raise AssemblerException('Constant cannot be negative')
-
         return "{0:016b}".format(constant)
 
     else:
-        raise AssemblerException('it aint even a number')
-        #symbols and shit
+        if mnem[1] in symbol_table:
+            constant = symbol_table[mnem[1]]
+        else:
+            raise AssemblerException('Symbol not recognized')
+
+
+    return "{0:016b}".format(constant)
 
 
 def translate_C(mnem):
@@ -176,34 +187,59 @@ def translate(mnem):
 
     return binary
 
+def is_label_sym_def(parse):
+    if len(parse) == 3:
+        if parse[0] == '(' and parse[2] == ')':
+            if is_symbol(parse[1]):
+                return True
+    return False
+
 def parse_file(fname):
     f = open(fname, 'r')
-    bininsts = []
-    ln = 1
+    commands = []
+    icount = -1
     for line in f:
         parse = tokenize_line(line)
         if parse != False:
-            try:
-                tr = translate(parse)
-                bininsts.append(tr)
-                print(tr)
-            except AssemblerException as e:
-                print('\nTranslation error on line '+str(ln)+': \n'+str(e))
-                break
+            if is_label_sym_def(parse):
+                if parse[1] not in symbol_table:
+                    symbol_table[parse[1]] = -1
+                else:
+                    raise AssemblerException('Trying to define label twice')
 
-        ln += 1
+            else:
+                icount += 1
+                commands.append(parse)
 
+                for sym in symbol_table:
+                    if symbol_table[sym] == -1:
+                        symbol_table[sym] = icount
     f.close()
 
-    print(fname.index('.'))
+
+    icount = 0
+
     f = open(fname[:fname.index('.')] + '.hack', 'w')
-    f.write('\n'.join(bininsts) + '\n')
+    for cmd in commands:
+        try:
+            tr = translate(cmd)
+            f.write(tr + '\n')
+            #print(tr)
+            icount += 1
+        except AssemblerException as e:
+            print('\nTranslation error on instruction '+str(icount)+': \n'+str(e))
+            break
+
     f.close()
 
-    return bininsts
+    return
 
 
 
 if __name__ == "__main__":
     if len(sys.argv) == 2:
         parse_file(sys.argv[1])
+
+# The full process should be:
+#  1. tokenize
+#  2. pull out label symbols into table

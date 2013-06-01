@@ -64,6 +64,14 @@ def tokenize_line(line):
         if c in [' ', '\t', '\n']:
             pass
 
+        elif c == '/':
+            if nexttok == '/':
+                nexttok = ''
+                break
+            elif nexttok != '':
+                tokens.append(nexttok)
+                nexttok = c
+
         elif c in ['@', '=', ';', '(', ')']:
             if nexttok != '':
                 tokens.append(nexttok)

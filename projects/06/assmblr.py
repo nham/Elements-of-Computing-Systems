@@ -80,6 +80,9 @@ symbol_table = {
     'KBD': 24576}
 
 
+varsym_mem = 16
+
+
 def is_symbol(string):
     return re.match('[a-zA-Z_.$][a-zA-Z0-9_.$]*', string) != None
 
@@ -123,6 +126,8 @@ def tokenize_line(line):
     return tokens
 
 def translate_A(mnem):
+    global varsym_mem
+
     if len(mnem) != 2:
         raise AssemblerException('Invalid A-instruction')
 
@@ -131,16 +136,17 @@ def translate_A(mnem):
         constant = int(mnem[1])
         if constant < 0:
             raise AssemblerException('Constant cannot be negative')
-        return "{0:016b}".format(constant)
+        addr = constant
 
     else:
         if mnem[1] in symbol_table:
-            constant = symbol_table[mnem[1]]
+            addr = symbol_table[mnem[1]]
         else:
-            raise AssemblerException('Symbol not recognized')
+            addr = varsym_mem
+            symbol_table[mnem[1]] = addr
+            varsym_mem += 1
 
-
-    return "{0:016b}".format(constant)
+    return "{0:016b}".format(addr)
 
 
 def translate_C(mnem):

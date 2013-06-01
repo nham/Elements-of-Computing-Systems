@@ -1,4 +1,4 @@
-import sys
+import sys, re
 
 class AssemblerException(Exception):
     pass
@@ -87,11 +87,17 @@ def translate_A(mnem):
     if len(mnem) != 2:
         raise AssemblerException('Invalid A-instruction')
 
-    constant = int(mnem[1])
-    if constant < 0:
-        raise AssemblerException('Constant cannot be negative')
 
-    return "{0:016b}".format(constant)
+    if mnem[1].isdigit():
+        constant = int(mnem[1])
+        if constant < 0:
+            raise AssemblerException('Constant cannot be negative')
+
+        return "{0:016b}".format(constant)
+
+    else:
+        raise AssemblerException('it aint even a number')
+        #symbols and shit
 
 
 def translate_C(mnem):

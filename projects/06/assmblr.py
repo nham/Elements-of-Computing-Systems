@@ -42,7 +42,14 @@ def translate(mnem):
         raise AssemblerException('Mnemonic too long: it can\'t exceed 5 tokens')
 
     if mnem[0] == '@':
-        binary = "{0:016b}".format(int(''.join(mnem[1:])))
+        if len(mnem) != 2:
+            raise AssemblerException('Invalid A-instruction')
+
+        constant = int(mnem[1])
+        if constant < 0:
+            raise AssemblerException('Constant cannot be negative')
+
+        binary = "{0:016b}".format(constant)
     else:
         if '=' in mnem:
             if mnem[1] != '=' or '=' in mnem[2:]:

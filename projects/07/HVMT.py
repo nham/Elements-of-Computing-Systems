@@ -3,10 +3,7 @@ import sys, os
 class TranslatorException(Exception):
     pass
 
-arith_commands = ['add', 'sub', 'neg', 'eq',
-                  'gt', 'lt', 'and', 'or', 'not']
-
-memaccess_commands = ['push', 'pop']
+labelcount = 0
 
 segments = {
     'argument': 0,
@@ -46,7 +43,7 @@ def read_and_tokenize(fname):
 
 
 def translate(command):
-    tokoff = 0
+    global labelcount
     pushDtostack = ['@SP', 'A=M', 'M=D', 'D=A+1', '@SP', 'M=D']
     popstacktoD  = ['@SP', 'D=M', 'AM=D-1', 'D=M']
 
@@ -65,6 +62,20 @@ def translate(command):
     elif command[0] == 'add' and len(command) == 1:
         # maybe we should push D=D+m and then pushDtostack
         return popstacktoD + ['A=A-1', 'M=D+M', 'D=A+1', '@SP', 'M=D']
+    elif command[0] == 'sub' and len(command) == 1:
+        return popstacktoD + ['A=A-1', 'M=M-D', 'D=A+1', '@SP', 'M=D']
+    elif command[0] in ['eq', 'gt', 'lt']  and len(command) == 1:
+        lab1 = 'JMP'+str(labelcount)
+        lab2 = 'JMP'+str(labelcount+1)
+        labelcount += 2
+
+        return (popstacktoD + ['@R13', 'M=D'] + popstacktoD 
+                + ['@R13', 'D=D-M', '@'+lab1, 'D;J'+command[0].upper(), '@'+lab2,
+                    'M=0;JMP', '('+lab1+')', 'M=-1', '('+lab2+')'])
+    elif command[0] == 'and' and len(command) == 1:
+        return popstacktoD + ['A=A-1', 'M=D&M', 'D=A+1', '@SP', 'M=D']
+    elif command[0] == 'or'  and len(command) == 1:
+        return popstacktoD + ['A=A-1', 'M=D|M', 'D=A+1', '@SP', 'M=D']
     else:
         raise TranslatorException('Unimplemented or invalid!')
 

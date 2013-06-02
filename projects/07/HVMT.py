@@ -50,7 +50,9 @@ def translate(command):
     if len(command) > 3:
         raise TranslatorException('Invalid command: too long')
 
-    if command[0] == 'push' and command[1] == 'constant':
+    vmcmd = command[0]
+
+    if vmcmd == 'push' and command[1] == 'constant':
         if (
             command[2].isdigit() and 
             int(command[2]) >= 0 and 
@@ -59,23 +61,28 @@ def translate(command):
             return ['@'+command[2], 'D=A'] + pushDtostack
         else:
             raise TranslatorException('Invalid constant')
-    elif command[0] == 'add' and len(command) == 1:
-        # maybe we should push D=D+m and then pushDtostack
-        return popstacktoD + ['A=A-1', 'M=D+M', 'D=A+1', '@SP', 'M=D']
-    elif command[0] == 'sub' and len(command) == 1:
-        return popstacktoD + ['A=A-1', 'M=M-D', 'D=A+1', '@SP', 'M=D']
-    elif command[0] in ['eq', 'gt', 'lt']  and len(command) == 1:
+    elif (vmcmd in ['add', 'sub', 'and', 'or'] 
+            and len(command) == 1):
+
+        if vmcmd == 'add':
+            maincomp = 'D+M'
+        elif vmcmd == 'sub':
+            maincomp = 'M-D'
+        elif vmcmd == 'and':
+            maincomp = 'D&M'
+        elif vmcmd == 'or':
+            maincomp = 'D|M'
+
+        return popstacktoD + ['A=A-1', 'M='+maincomp, 'D=A+1', '@SP', 'M=D']
+
+    elif vmcmd in ['eq', 'gt', 'lt']  and len(command) == 1:
         lab1 = 'JMP'+str(labelcount)
         lab2 = 'JMP'+str(labelcount+1)
         labelcount += 2
 
         return (popstacktoD + ['@R13', 'M=D'] + popstacktoD 
-                + ['@R13', 'D=D-M', '@'+lab1, 'D;J'+command[0].upper(), '@'+lab2,
+                + ['@R13', 'D=D-M', '@'+lab1, 'D;J'+vmcmd.upper(), '@'+lab2,
                     'M=0;JMP', '('+lab1+')', 'M=-1', '('+lab2+')'])
-    elif command[0] == 'and' and len(command) == 1:
-        return popstacktoD + ['A=A-1', 'M=D&M', 'D=A+1', '@SP', 'M=D']
-    elif command[0] == 'or'  and len(command) == 1:
-        return popstacktoD + ['A=A-1', 'M=D|M', 'D=A+1', '@SP', 'M=D']
     else:
         raise TranslatorException('Unimplemented or invalid!')
 

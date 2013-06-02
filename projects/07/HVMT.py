@@ -46,21 +46,54 @@ def translate(command):
     global labelcount
     pushDtostack = ['@SP', 'A=M', 'M=D', 'D=A+1', '@SP', 'M=D']
     popstacktoD  = ['@SP', 'D=M', 'AM=D-1', 'D=M']
+    storeDinRN = lambda n: ['@R'+str(n), 'M=D']
 
     if len(command) > 3:
         raise TranslatorException('Invalid command: too long')
 
     vmcmd = command[0]
 
-    if vmcmd == 'push' and command[1] == 'constant':
-        if (
-            command[2].isdigit() and 
-            int(command[2]) >= 0 and 
-            int(command[2]) <= 32767
-           ):
-            return ['@'+command[2], 'D=A'] + pushDtostack
+    if vmcmd in ['push', 'pop']:
+        seg = command[1]
+
+    if vmcmd == 'push':
+        if seg == 'constant':
+            if (
+                command[2].isdigit() and 
+                int(command[2]) >= 0 and 
+                int(command[2]) <= 32767
+               ):
+                return ['@'+command[2], 'D=A'] + pushDtostack
+            else:
+                raise TranslatorException('Invalid constant')
+
+        elif seg in ['local', 'argument', 'this', 'that']:
+            pass
+
+    elif vmcmd == 'pop' and seg in ['local', 'argument', 'this', 'that']:
+        if seg == 'local':
+            reg = '@LCL'
+        elif seg == 'argument':
+            reg = '@ARG'
+        elif seg == 'this':
+            reg = '@THIS'
+        elif seg == 'that':
+            reg = '@THAT'
+
+        return (popstacktoD + storeDinRN(13)
+        + [reg, 'D=M', '@'+command[2], 'D=D+A']
+        + storeDinRN(14) + ['@R13', 'D=M', '@R14', 'A=M', 'M=D'])
+
+    elif vmcmd == 'pop' and seg in ['pointer', 'temp']:
+        if seg == 'pointer':
+            addr = 3
         else:
-            raise TranslatorException('Invalid constant')
+            addr = 5
+
+        addr = addr + int(command[2])
+
+        x = popstacktoD + ['@'+str(addr), 'M=D']
+        return x
 
     elif (vmcmd in ['add', 'sub', 'and', 'or'] 
             and len(command) == 1):
@@ -128,8 +161,6 @@ def doTheThings(path):
         for cmd in commands:
             assem_out += translate(cmd)
             print(cmd)
-            print(assem_out)
-            print('--------------')
 
             
         f = open(path[:path.index('.')] + '.asm', 'w')

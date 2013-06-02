@@ -61,6 +61,13 @@ def translate3(command):
     elif seg == 'that':
         reg = '@THAT'
 
+    if seg == 'pointer':
+        addr = 3
+    elif seg == 'temp':
+        addr = 5
+    elif seg == 'static':
+        addr = 16
+
 
     if vmcmd == 'push':
         if seg == 'constant':
@@ -69,12 +76,7 @@ def translate3(command):
         elif seg in ['local', 'argument', 'this', 'that']:
             return [reg, 'D=M', ldind, 'A=A+D', 'D=M'] + pushDtostack
 
-        elif seg in ['pointer', 'temp']:
-            if seg == 'pointer':
-                addr = 3
-            else:
-                addr = 5
-
+        elif seg in ['pointer', 'temp', 'static']:
             addr = addr + int(ind)
             return ['@'+str(addr), 'D=M'] + pushDtostack
 
@@ -87,13 +89,7 @@ def translate3(command):
             + [reg, 'D=M', ldind, 'D=D+A']
             + storeDinRN(14) + ['@R13', 'D=M', '@R14', 'A=M', 'M=D'])
 
-        elif seg in ['pointer', 'temp']:
-
-            if seg == 'pointer':
-                addr = 3
-            else:
-                addr = 5
-
+        elif seg in ['pointer', 'temp', 'static']:
             addr = addr + int(ind)
             return popstacktoD + ['@'+str(addr), 'M=D']
 

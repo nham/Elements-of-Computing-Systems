@@ -42,95 +42,125 @@ def read_and_tokenize(fname):
     return commands
 
 
+def translate3(command):
+    pushDtostack = ['@SP', 'A=M', 'M=D', 'D=A+1', '@SP', 'M=D']
+    popstacktoD  = ['@SP', 'D=M', 'AM=D-1', 'D=M']
+    storeDinRN = lambda n: ['@R'+str(n), 'M=D']
+
+    vmcmd = command[0]
+    seg = command[1]
+    ind = command[2]
+    ldind = '@'+ind
+
+    if seg == 'local':
+        reg = '@LCL'
+    elif seg == 'argument':
+        reg = '@ARG'
+    elif seg == 'this':
+        reg = '@THIS'
+    elif seg == 'that':
+        reg = '@THAT'
+
+
+    if vmcmd == 'push':
+        if seg == 'constant':
+            return [ldind, 'D=A'] + pushDtostack
+
+        elif seg in ['local', 'argument', 'this', 'that']:
+            return [reg, 'D=M', ldind, 'A=A+D', 'D=M'] + pushDtostack
+
+        elif seg in ['pointer', 'temp']:
+            if seg == 'pointer':
+                addr = 3
+            else:
+                addr = 5
+
+            addr = addr + int(ind)
+            return ['@'+str(addr), 'D=M'] + pushDtostack
+
+
+    elif vmcmd == 'pop':
+        
+        if seg in ['local', 'argument', 'this', 'that']:
+
+            return (popstacktoD + storeDinRN(13)
+            + [reg, 'D=M', ldind, 'D=D+A']
+            + storeDinRN(14) + ['@R13', 'D=M', '@R14', 'A=M', 'M=D'])
+
+        elif seg in ['pointer', 'temp']:
+
+            if seg == 'pointer':
+                addr = 3
+            else:
+                addr = 5
+
+            addr = addr + int(ind)
+            return popstacktoD + ['@'+str(addr), 'M=D']
+
+
+
 def translate(command):
     global labelcount
     pushDtostack = ['@SP', 'A=M', 'M=D', 'D=A+1', '@SP', 'M=D']
     popstacktoD  = ['@SP', 'D=M', 'AM=D-1', 'D=M']
     storeDinRN = lambda n: ['@R'+str(n), 'M=D']
 
+
     if len(command) > 3:
         raise TranslatorException('Invalid command: too long')
 
-    vmcmd = command[0]
+    if len(command) == 3:
+        if command[0] not in ['push', 'pop']:
+            raise TranslatorException('Invalid command of length 3')
 
-    if vmcmd in ['push', 'pop']:
-        seg = command[1]
+        if (command[1] not in 
+                ['argument', 'local', 'static', 'constant',
+                 'this', 'that', 'pointer', 'temp']):
+            raise TranslatorException('Invalid segment')
 
-    if vmcmd == 'push':
-        if seg == 'constant':
-            if (
-                command[2].isdigit() and 
-                int(command[2]) >= 0 and 
-                int(command[2]) <= 32767
-               ):
-                return ['@'+command[2], 'D=A'] + pushDtostack
-            else:
-                raise TranslatorException('Invalid constant')
+        ind = command[2]
+        if not (ind.isdigit() and int(ind) >= 0 and int(ind) <= 32767):
+            raise TranslatorException('Invalid constant')
 
-        elif seg in ['local', 'argument', 'this', 'that']:
-            pass
-
-    elif vmcmd == 'pop' and seg in ['local', 'argument', 'this', 'that']:
-        if seg == 'local':
-            reg = '@LCL'
-        elif seg == 'argument':
-            reg = '@ARG'
-        elif seg == 'this':
-            reg = '@THIS'
-        elif seg == 'that':
-            reg = '@THAT'
-
-        return (popstacktoD + storeDinRN(13)
-        + [reg, 'D=M', '@'+command[2], 'D=D+A']
-        + storeDinRN(14) + ['@R13', 'D=M', '@R14', 'A=M', 'M=D'])
-
-    elif vmcmd == 'pop' and seg in ['pointer', 'temp']:
-        if seg == 'pointer':
-            addr = 3
-        else:
-            addr = 5
-
-        addr = addr + int(command[2])
-
-        x = popstacktoD + ['@'+str(addr), 'M=D']
-        return x
-
-    elif (vmcmd in ['add', 'sub', 'and', 'or'] 
-            and len(command) == 1):
-
-        if vmcmd == 'add':
-            maincomp = 'D+M'
-        elif vmcmd == 'sub':
-            maincomp = 'M-D'
-        elif vmcmd == 'and':
-            maincomp = 'D&M'
-        elif vmcmd == 'or':
-            maincomp = 'D|M'
-
-        return popstacktoD + ['A=A-1', 'M='+maincomp, 'D=A+1', '@SP', 'M=D']
-
-    elif vmcmd in ['eq', 'gt', 'lt']  and len(command) == 1:
-
-        lab1 = 'LAB'+str(labelcount)
-        lab2 = 'LAB'+str(labelcount+1)
-        labelcount += 2
-
-        return (popstacktoD + ['@R13', 'M=D'] + popstacktoD 
-                + ['@R13', 'D=D-M', '@'+lab1, 'D;J'+vmcmd.upper(), 'D=0']
-                + pushDtostack + ['@'+lab2, '0;JMP', '('+lab1+')', 'D=-1']
-                + pushDtostack + ['('+lab2+')'])
-
-    elif vmcmd in ['neg', 'not'] and len(command) == 1:
-
-        if vmcmd == 'neg':
-            maincomp = '!D'
-        elif vmcmd == 'not':
-            maincomp = '-D'
-
-        return popstacktoD + ['D='+maincomp] + pushDtostack
-
+        return translate3(command)
     else:
-        raise TranslatorException('Unimplemented or invalid!')
+        vmcmd = command[0]
+
+        if vmcmd in ['add', 'sub', 'and', 'or']:
+
+            if vmcmd == 'add':
+                maincomp = 'D+M'
+            elif vmcmd == 'sub':
+                maincomp = 'M-D'
+            elif vmcmd == 'and':
+                maincomp = 'D&M'
+            elif vmcmd == 'or':
+                maincomp = 'D|M'
+
+            return popstacktoD + ['A=A-1', 'M='+maincomp, 'D=A+1', '@SP', 'M=D']
+
+        elif vmcmd in ['eq', 'gt', 'lt']:
+
+            lab1 = 'LAB'+str(labelcount)
+            lab2 = 'LAB'+str(labelcount+1)
+            labelcount += 2
+
+            return (popstacktoD + ['@R13', 'M=D'] + popstacktoD 
+                    + ['@R13', 'D=D-M', '@'+lab1, 'D;J'+vmcmd.upper(), 'D=0']
+                    + pushDtostack + ['@'+lab2, '0;JMP', '('+lab1+')', 'D=-1']
+                    + pushDtostack + ['('+lab2+')'])
+
+        elif vmcmd in ['neg', 'not']:
+
+            if vmcmd == 'neg':
+                maincomp = '!D'
+            elif vmcmd == 'not':
+                maincomp = '-D'
+
+            return popstacktoD + ['D='+maincomp] + pushDtostack
+
+        else:
+            raise TranslatorException('Unimplemented or invalid!')
 
 
 
@@ -159,8 +189,10 @@ def doTheThings(path):
         print('--------------')
 
         for cmd in commands:
+            print('translating ', end='')
+            print(cmd, end='...')
             assem_out += translate(cmd)
-            print(cmd)
+            print('done.')
 
             
         f = open(path[:path.index('.')] + '.asm', 'w')

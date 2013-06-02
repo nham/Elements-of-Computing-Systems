@@ -61,6 +61,7 @@ def translate(command):
             return ['@'+command[2], 'D=A'] + pushDtostack
         else:
             raise TranslatorException('Invalid constant')
+
     elif (vmcmd in ['add', 'sub', 'and', 'or'] 
             and len(command) == 1):
 
@@ -76,6 +77,7 @@ def translate(command):
         return popstacktoD + ['A=A-1', 'M='+maincomp, 'D=A+1', '@SP', 'M=D']
 
     elif vmcmd in ['eq', 'gt', 'lt']  and len(command) == 1:
+
         lab1 = 'LAB'+str(labelcount)
         lab2 = 'LAB'+str(labelcount+1)
         labelcount += 2
@@ -84,7 +86,9 @@ def translate(command):
                 + ['@R13', 'D=D-M', '@'+lab1, 'D;J'+vmcmd.upper(), 'D=0']
                 + pushDtostack + ['@'+lab2, '0;JMP', '('+lab1+')', 'D=-1']
                 + pushDtostack + ['('+lab2+')'])
+
     elif vmcmd in ['neg', 'not'] and len(command) == 1:
+
         if vmcmd == 'neg':
             maincomp = '!D'
         elif vmcmd == 'not':

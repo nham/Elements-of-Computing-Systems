@@ -5,158 +5,175 @@ class TranslatorException(Exception):
 
 labelcount = 0
 
-segments = {
-    'argument': 0,
-    'local': 0,
-    'static': 0,
-    'constant': 0,
-    'this': 0,
-    'that': 0,
-    'pointer': 0,
-    'temp': 0}
+C_ARITHMETIC, \
+C_PUSH, \
+C_POP, \
+C_LABEL, \
+C_GOTO, \
+C_IF, \
+C_FUNCTION, \
+C_RETURN, \
+C_CALL = [1,2,3,4,5,6,7,8,9]
 
-def tokenize_line(line):
-    tokens = []
-    currtok = ''
-    end = len(line) - 1
+class Parser:
+    def __init__(self, src):
+        self.f = open(src, 'r')
+        self.currcmd = None
 
-    if '//' in line:
-        end = line.index('//')
+    def advance(self):
+        print('inside advance!')
+        line = self.f.readline()
+        self.currcmd = self.tokenize_line(line)
+        while(not self.currcmd):
+            line = self.f.readline()
 
-    if len(line[:end]) > 0:
-        return line[:end].split()
-    else:
-        return False
+            if len(line) == 0:
+                return False
 
-def read_and_tokenize(fname):
-    f = open(fname, 'r')
-    commands = []
-    i = -1
-    for line in f:
-        tokens = tokenize_line(line)
-        if tokens != False:
-            i += 1
-            commands.append(tokens)
-
-    f.close()
-    return commands
+            self.currcmd = self.tokenize_line(line)
 
 
-def translate3(command):
+        return True
+
+    def commandType(self):
+        cmd = self.currcmd[0]
+
+        lookup = {
+            'push': C_PUSH,
+            'pop': C_POP,
+            'label': C_LABEL,
+            'goto': C_GOTO,
+            'if': C_IF,
+            'func': C_FUNCTION,
+            'return': C_RETURN,
+            'call': C_CALL
+            }
+
+        if cmd not in lookup:
+            return C_ARITHMETIC
+        else:
+            return lookup[cmd]
+
+
+    def arg1(self):
+        if self.commandType() == C_ARITHMETIC:
+            return self.currcmd[0]
+        else:
+            return self.currcmd[1]
+        
+    def arg2(self):
+        return self.currcmd[2]
+
+    def tokenize_line(self, line):
+        tokens = []
+        currtok = ''
+        end = len(line) - 1
+
+        if '//' in line:
+            end = line.index('//')
+
+        if len(line[:end]) > 0:
+            return line[:end].split()
+        else:
+            return False
+
+
+def translate_pushpop(cmd, arg1, arg2):
     pushDtostack = ['@SP', 'A=M', 'M=D', 'D=A+1', '@SP', 'M=D']
     popstacktoD  = ['@SP', 'D=M', 'AM=D-1', 'D=M']
     storeDinRN = lambda n: ['@R'+str(n), 'M=D']
 
-    vmcmd = command[0]
-    seg = command[1]
-    ind = command[2]
-    ldind = '@'+ind
+    if (arg1 not in 
+            ['argument', 'local', 'static', 'constant',
+             'this', 'that', 'pointer', 'temp']):
+        raise TranslatorException('Invalid segment')
 
-    if seg == 'local':
+    if not (arg2.isdigit() and int(arg2) >= 0 and int(arg2) <= 32767):
+        raise TranslatorException('Invalid constant')
+
+
+    ldind = '@'+arg2
+
+    if arg1 == 'local':
         reg = '@LCL'
-    elif seg == 'argument':
+    elif arg1 == 'argument':
         reg = '@ARG'
-    elif seg == 'this':
+    elif arg1 == 'this':
         reg = '@THIS'
-    elif seg == 'that':
+    elif arg1 == 'that':
         reg = '@THAT'
 
-    if seg == 'pointer':
+    if arg1 == 'pointer':
         addr = 3
-    elif seg == 'temp':
+    elif arg1 == 'temp':
         addr = 5
-    elif seg == 'static':
+    elif arg1 == 'static':
         addr = 16
 
+    reglocs = ['local', 'argument', 'this', 'that']
 
-    if vmcmd == 'push':
-        if seg == 'constant':
+    if cmd == C_PUSH:
+        if arg1 == 'constant':
             return [ldind, 'D=A'] + pushDtostack
 
-        elif seg in ['local', 'argument', 'this', 'that']:
+        elif arg1 in reglocs:
             return [reg, 'D=M', ldind, 'A=A+D', 'D=M'] + pushDtostack
 
-        elif seg in ['pointer', 'temp', 'static']:
-            addr = addr + int(ind)
+        elif arg1 in ['pointer', 'temp', 'static']:
+            addr = addr + int(arg2)
             return ['@'+str(addr), 'D=M'] + pushDtostack
 
-
-    elif vmcmd == 'pop':
-        
-        if seg in ['local', 'argument', 'this', 'that']:
-
+    elif cmd == C_POP:
+        if arg1 in reglocs:
             return (popstacktoD + storeDinRN(13)
             + [reg, 'D=M', ldind, 'D=D+A']
             + storeDinRN(14) + ['@R13', 'D=M', '@R14', 'A=M', 'M=D'])
 
-        elif seg in ['pointer', 'temp', 'static']:
-            addr = addr + int(ind)
+        elif arg1 in ['pointer', 'temp', 'static']:
+            addr = addr + int(arg2)
             return popstacktoD + ['@'+str(addr), 'M=D']
 
 
-
-def translate(command):
+def translate_arith(cmd):
     global labelcount
     pushDtostack = ['@SP', 'A=M', 'M=D', 'D=A+1', '@SP', 'M=D']
     popstacktoD  = ['@SP', 'D=M', 'AM=D-1', 'D=M']
-    storeDinRN = lambda n: ['@R'+str(n), 'M=D']
 
+    if cmd in ['add', 'sub', 'and', 'or']:
 
-    if len(command) > 3:
-        raise TranslatorException('Invalid command: too long')
+        if cmd == 'add':
+            maincomp = 'D+M'
+        elif cmd == 'sub':
+            maincomp = 'M-D'
+        elif cmd == 'and':
+            maincomp = 'D&M'
+        elif cmd == 'or':
+            maincomp = 'D|M'
 
-    if len(command) == 3:
-        if command[0] not in ['push', 'pop']:
-            raise TranslatorException('Invalid command of length 3')
+        return popstacktoD + ['A=A-1', 'M='+maincomp, 'D=A+1', '@SP', 'M=D']
 
-        if (command[1] not in 
-                ['argument', 'local', 'static', 'constant',
-                 'this', 'that', 'pointer', 'temp']):
-            raise TranslatorException('Invalid segment')
+    elif cmd in ['eq', 'gt', 'lt']:
 
-        ind = command[2]
-        if not (ind.isdigit() and int(ind) >= 0 and int(ind) <= 32767):
-            raise TranslatorException('Invalid constant')
+        lab1 = 'LAB'+str(labelcount)
+        lab2 = 'LAB'+str(labelcount+1)
+        labelcount += 2
 
-        return translate3(command)
+        return (popstacktoD + ['@R13', 'M=D'] + popstacktoD 
+                + ['@R13', 'D=D-M', '@'+lab1, 'D;J'+cmd.upper(), 'D=0']
+                + pushDtostack + ['@'+lab2, '0;JMP', '('+lab1+')', 'D=-1']
+                + pushDtostack + ['('+lab2+')'])
+
+    elif cmd in ['neg', 'not']:
+
+        if cmd == 'neg':
+            maincomp = '!D'
+        elif cmd == 'not':
+            maincomp = '-D'
+
+        return popstacktoD + ['D='+maincomp] + pushDtostack
+
     else:
-        vmcmd = command[0]
-
-        if vmcmd in ['add', 'sub', 'and', 'or']:
-
-            if vmcmd == 'add':
-                maincomp = 'D+M'
-            elif vmcmd == 'sub':
-                maincomp = 'M-D'
-            elif vmcmd == 'and':
-                maincomp = 'D&M'
-            elif vmcmd == 'or':
-                maincomp = 'D|M'
-
-            return popstacktoD + ['A=A-1', 'M='+maincomp, 'D=A+1', '@SP', 'M=D']
-
-        elif vmcmd in ['eq', 'gt', 'lt']:
-
-            lab1 = 'LAB'+str(labelcount)
-            lab2 = 'LAB'+str(labelcount+1)
-            labelcount += 2
-
-            return (popstacktoD + ['@R13', 'M=D'] + popstacktoD 
-                    + ['@R13', 'D=D-M', '@'+lab1, 'D;J'+vmcmd.upper(), 'D=0']
-                    + pushDtostack + ['@'+lab2, '0;JMP', '('+lab1+')', 'D=-1']
-                    + pushDtostack + ['('+lab2+')'])
-
-        elif vmcmd in ['neg', 'not']:
-
-            if vmcmd == 'neg':
-                maincomp = '!D'
-            elif vmcmd == 'not':
-                maincomp = '-D'
-
-            return popstacktoD + ['D='+maincomp] + pushDtostack
-
-        else:
-            raise TranslatorException('Unimplemented or invalid!')
+        raise TranslatorException('Unimplemented or invalid!')
 
 
 
@@ -169,35 +186,41 @@ def doTheThings(path):
     if '.' in path:
         ext = fext(path)
         if  ext == '.vm':
-            commands = read_and_tokenize(path)
+            parser = Parser(path)
         else:
             raise TranslatorException('Unrecognized file extension "'+ext+'"')
-    else:
-        isdir = True
-        commands = []
-        for fname in os.listdir(path):
-            if fext(fname) == '.vm':
-                commands += read_and_tokenize(path+fname)
+#    else:
+#        isdir = True
+#        commands = []
+#        for fname in os.listdir(path):
+#            if fext(fname) == '.vm':
+#                commands += read_and_tokenize(path+fname)
 
-    if len(commands) > 0:
-        assem_out = assembly_init()
-        print(path)
-        print('--------------')
+    assem_out = assembly_init()
+    print(path)
+    print('--------------')
 
-        for cmd in commands:
-            print('translating ', end='')
-            print(cmd, end='...')
-            assem_out += translate(cmd)
-            print('done.')
+    while parser.advance():
+        print('translating ', end='')
+        print(parser.currcmd, end='...')
 
-            
-        f = open(path[:path.index('.')] + '.asm', 'w')
-        for ass in assem_out:
-            f.write(ass + '\n')
+        cmdtype = parser.commandType()
 
-        f.close()
+        if cmdtype == C_ARITHMETIC:
+            assem_out += translate_arith(parser.arg1())
+        elif cmdtype in [C_PUSH, C_POP]:
+            assem_out += translate_pushpop(cmdtype, parser.arg1(), parser.arg2())
+        else:
+            return "command unimplemented"
+
+        print('done.')
+
+    f = open(path[:path.index('.')] + '.asm', 'w')
+    for ass in assem_out:
+        f.write(ass + '\n')
+
+    f.close()
                 
-
 
 if __name__ == "__main__":
     if len(sys.argv) == 2:

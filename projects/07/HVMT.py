@@ -3,8 +3,6 @@ import sys, os
 class TranslatorException(Exception):
     pass
 
-labelcount = 0
-
 C_ARITHMETIC, \
 C_PUSH, \
 C_POP, \
@@ -15,8 +13,6 @@ C_FUNCTION, \
 C_RETURN, \
 C_CALL = [1,2,3,4,5,6,7,8,9]
 
-pushDtostack = ['@SP', 'A=M', 'M=D', 'D=A+1', '@SP', 'M=D']
-popstacktoD  = ['@SP', 'D=M', 'AM=D-1', 'D=M']
 
 class Parser:
     def __init__(self, src):
@@ -24,7 +20,6 @@ class Parser:
         self.currcmd = None
 
     def advance(self):
-        print('inside advance!')
         line = self.f.readline()
         self.currcmd = self.tokenize_line(line)
         while(not self.currcmd):
@@ -47,7 +42,7 @@ class Parser:
             'label': C_LABEL,
             'goto': C_GOTO,
             'if-goto': C_IF,
-            'func': C_FUNCTION,
+            'function': C_FUNCTION,
             'return': C_RETURN,
             'call': C_CALL
             }
@@ -81,102 +76,136 @@ class Parser:
             return False
 
 
-def translate_pushpop(cmd, arg1, arg2):
-    storeDinRN = lambda n: ['@R'+str(n), 'M=D']
+class CodeWriter:
+    pushDtostack = ['@SP', 'A=M', 'M=D', 'D=A+1', '@SP', 'M=D']
+    popstacktoD  = ['@SP', 'D=M', 'AM=D-1', 'D=M']
 
-    if (arg1 not in 
-            ['argument', 'local', 'static', 'constant',
-             'this', 'that', 'pointer', 'temp']):
-        raise TranslatorException('Invalid segment')
-
-    if not (arg2.isdigit() and int(arg2) >= 0 and int(arg2) <= 32767):
-        raise TranslatorException('Invalid constant')
+    def __init__(self, path):
+        self.f = open(path, 'w')
+        self.labelcount = 0
 
 
-    ldind = '@'+arg2
+    def translate_pushpop(self, cmd, segment, index):
+        storeDinRN = lambda n: ['@R'+str(n), 'M=D']
+        pushDtostack = CodeWriter.pushDtostack
+        popstacktoD = CodeWriter.popstacktoD
 
-    if arg1 == 'local':
-        reg = '@LCL'
-    elif arg1 == 'argument':
-        reg = '@ARG'
-    elif arg1 == 'this':
-        reg = '@THIS'
-    elif arg1 == 'that':
-        reg = '@THAT'
+        if (segment not in 
+                ['argument', 'local', 'static', 'constant',
+                 'this', 'that', 'pointer', 'temp']):
+            raise TranslatorException('Invalid segment')
 
-    if arg1 == 'pointer':
-        addr = 3
-    elif arg1 == 'temp':
-        addr = 5
-    elif arg1 == 'static':
-        addr = 16
-
-    reglocs = ['local', 'argument', 'this', 'that']
-
-    if cmd == C_PUSH:
-        if arg1 == 'constant':
-            return [ldind, 'D=A'] + pushDtostack
-
-        elif arg1 in reglocs:
-            return [reg, 'D=M', ldind, 'A=A+D', 'D=M'] + pushDtostack
-
-        elif arg1 in ['pointer', 'temp', 'static']:
-            addr = addr + int(arg2)
-            return ['@'+str(addr), 'D=M'] + pushDtostack
-
-    elif cmd == C_POP:
-        if arg1 in reglocs:
-            return (popstacktoD + storeDinRN(13)
-            + [reg, 'D=M', ldind, 'D=D+A']
-            + storeDinRN(14) + ['@R13', 'D=M', '@R14', 'A=M', 'M=D'])
-
-        elif arg1 in ['pointer', 'temp', 'static']:
-            addr = addr + int(arg2)
-            return popstacktoD + ['@'+str(addr), 'M=D']
+        if not (index.isdigit() and int(index) >= 0 and int(index) <= 32767):
+            raise TranslatorException('Invalid constant')
 
 
-def translate_arith(cmd):
-    global labelcount
+        ldind = '@'+index
 
-    if cmd in ['add', 'sub', 'and', 'or']:
+        if segment == 'local':
+            reg = '@LCL'
+        elif segment == 'argument':
+            reg = '@ARG'
+        elif segment == 'this':
+            reg = '@THIS'
+        elif segment == 'that':
+            reg = '@THAT'
+        elif segment != 'constant':
+            if segment == 'pointer':
+                addr = 3
+            elif segment == 'temp':
+                addr = 5
+            elif segment == 'static':
+                addr = 16
 
-        if cmd == 'add':
-            maincomp = 'D+M'
-        elif cmd == 'sub':
-            maincomp = 'M-D'
-        elif cmd == 'and':
-            maincomp = 'D&M'
-        elif cmd == 'or':
-            maincomp = 'D|M'
+            addr = '@'+str(addr + int(index))
 
-        return popstacktoD + ['A=A-1', 'M='+maincomp, 'D=A+1', '@SP', 'M=D']
+        dedicated = ['local', 'argument', 'this', 'that']
+        fixed = ['pointer', 'temp', 'static']
 
-    elif cmd in ['eq', 'gt', 'lt']:
+        if cmd == C_PUSH:
+            if segment == 'constant':
+                return [ldind, 'D=A'] + pushDtostack
 
-        lab1 = '$LAB'+str(labelcount)
-        lab2 = '$LAB'+str(labelcount+1)
-        labelcount += 2
+            elif segment in dedicated:
+                return [reg, 'D=M', ldind, 'A=A+D', 'D=M'] + pushDtostack
 
-        return (popstacktoD + ['@R13', 'M=D'] + popstacktoD 
-                + ['@R13', 'D=D-M', '@'+lab1, 'D;J'+cmd.upper(), 'D=0']
-                + pushDtostack + ['@'+lab2, '0;JMP', '('+lab1+')', 'D=-1']
-                + pushDtostack + ['('+lab2+')'])
+            elif segment in fixed:
+                return [addr, 'D=M'] + pushDtostack
 
-    elif cmd in ['neg', 'not']:
+        elif cmd == C_POP:
+            if segment in dedicated:
+                return (popstacktoD + storeDinRN(13)
+                + [reg, 'D=M', ldind, 'D=D+A']
+                + storeDinRN(14) + ['@R13', 'D=M', '@R14', 'A=M', 'M=D'])
 
-        if cmd == 'neg':
-            maincomp = '!D'
-        elif cmd == 'not':
-            maincomp = '-D'
-
-        return popstacktoD + ['D='+maincomp] + pushDtostack
-
-    else:
-        raise TranslatorException('Unimplemented or invalid!')
+            elif segment in fixed:
+                return popstacktoD + [addr, 'M=D']
 
 
-def translate_if(arg1):
-    return popstacktoD + ['@'+arg1, 'D;JNE']
+    def translate_arith(self, cmd):
+        pushDtostack = CodeWriter.pushDtostack
+        popstacktoD = CodeWriter.popstacktoD
+
+        if cmd in ['add', 'sub', 'and', 'or']:
+
+            if cmd == 'add':
+                maincomp = 'D+M'
+            elif cmd == 'sub':
+                maincomp = 'M-D'
+            elif cmd == 'and':
+                maincomp = 'D&M'
+            elif cmd == 'or':
+                maincomp = 'D|M'
+
+            return popstacktoD + ['A=A-1', 'M='+maincomp, 'D=A+1', '@SP', 'M=D']
+
+        elif cmd in ['eq', 'gt', 'lt']:
+
+            lab1 = '$LAB'+str(self.labelcount)
+            lab2 = '$LAB'+str(self.labelcount+1)
+            self.labelcount += 2
+
+            return (popstacktoD + ['@R13', 'M=D'] + popstacktoD 
+                    + ['@R13', 'D=D-M', '@'+lab1, 'D;J'+cmd.upper(), 'D=0']
+                    + pushDtostack + ['@'+lab2, '0;JMP', '('+lab1+')', 'D=-1']
+                    + pushDtostack + ['('+lab2+')'])
+
+        elif cmd in ['neg', 'not']:
+
+            if cmd == 'neg':
+                maincomp = '!D'
+            elif cmd == 'not':
+                maincomp = '-D'
+
+            return popstacktoD + ['D='+maincomp] + pushDtostack
+
+        else:
+            raise TranslatorException('Unimplemented or invalid!')
+
+
+    def translate_if(self, arg1):
+        return CodeWriter.popstacktoD + ['@'+arg1, 'D;JNE']
+
+
+    def write_pushpop(self, command, segment, index):
+        assembly = self.translate_pushpop(command, segment, index)
+        self.f.write('\n'.join(assembly)+'\n')
+
+    def write_arith(self, command):
+        assembly = self.translate_arith(command)
+        self.f.write('\n'.join(assembly)+'\n')
+
+    def write_if(self, label):
+        assembly = self.translate_if(label)
+        self.f.write('\n'.join(assembly)+'\n')
+
+    def write_label(self, label):
+        assembly = '('+label+')'
+        self.f.write(assembly+'\n')
+
+    def write_goto(self, label):
+        assembly = ['@'+label, '0;JMP']
+        self.f.write('\n'.join(assembly)+'\n')
 
 
 def doTheThings(path):
@@ -186,8 +215,7 @@ def doTheThings(path):
         raise TranslatorException('Bad file name')
 
     parser = Parser(path)
-
-    assem_out = []
+    writer = CodeWriter(path[:path.index('.')] + '.asm')
     print(path)
     print('--------------')
 
@@ -197,25 +225,19 @@ def doTheThings(path):
         cmdtype = parser.commandType()
 
         if cmdtype == C_ARITHMETIC:
-            assem_out += translate_arith(parser.arg1())
+            writer.write_arith(parser.arg1())
         elif cmdtype in [C_PUSH, C_POP]:
-            assem_out += translate_pushpop(cmdtype, parser.arg1(), parser.arg2())
+            writer.write_pushpop(cmdtype, parser.arg1(), parser.arg2())
         elif cmdtype == C_LABEL:
-            assem_out += ['('+parser.arg1()+')']
+            writer.write_label(parser.arg1())
         elif cmdtype == C_GOTO:
-            assem_out += ['@'+parser.arg1(), '0;JMP']
+            writer.write_goto(parser.arg1())
         elif cmdtype == C_IF:
-            assem_out += translate_if(parser.arg1())
+            writer.write_if(parser.arg1())
         else:
             return "command unimplemented"
 
         print('done.')
-
-    f = open(path[:path.index('.')] + '.asm', 'w')
-    for ass in assem_out:
-        f.write(ass + '\n')
-
-    f.close()
                 
 
 if __name__ == "__main__":

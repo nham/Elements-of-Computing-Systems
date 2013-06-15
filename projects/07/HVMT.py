@@ -154,8 +154,8 @@ def translate_arith(cmd):
 
     elif cmd in ['eq', 'gt', 'lt']:
 
-        lab1 = 'LAB'+str(labelcount)
-        lab2 = 'LAB'+str(labelcount+1)
+        lab1 = '$LAB'+str(labelcount)
+        lab2 = '$LAB'+str(labelcount+1)
         labelcount += 2
 
         return (popstacktoD + ['@R13', 'M=D'] + popstacktoD 
@@ -176,10 +176,6 @@ def translate_arith(cmd):
         raise TranslatorException('Unimplemented or invalid!')
 
 
-
-def assembly_init():
-    return ['@256', 'D=A', '@SP', 'M=D']
-
 def doTheThings(path):
     fext = lambda s: s[s.index('.'):]
     # path is either a file name or a directory name
@@ -196,7 +192,7 @@ def doTheThings(path):
 #            if fext(fname) == '.vm':
 #                commands += read_and_tokenize(path+fname)
 
-    assem_out = assembly_init()
+    assem_out = []
     print(path)
     print('--------------')
 

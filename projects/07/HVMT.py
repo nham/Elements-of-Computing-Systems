@@ -15,6 +15,9 @@ C_FUNCTION, \
 C_RETURN, \
 C_CALL = [1,2,3,4,5,6,7,8,9]
 
+pushDtostack = ['@SP', 'A=M', 'M=D', 'D=A+1', '@SP', 'M=D']
+popstacktoD  = ['@SP', 'D=M', 'AM=D-1', 'D=M']
+
 class Parser:
     def __init__(self, src):
         self.f = open(src, 'r')
@@ -43,7 +46,7 @@ class Parser:
             'pop': C_POP,
             'label': C_LABEL,
             'goto': C_GOTO,
-            'if': C_IF,
+            'if-goto': C_IF,
             'func': C_FUNCTION,
             'return': C_RETURN,
             'call': C_CALL
@@ -79,8 +82,6 @@ class Parser:
 
 
 def translate_pushpop(cmd, arg1, arg2):
-    pushDtostack = ['@SP', 'A=M', 'M=D', 'D=A+1', '@SP', 'M=D']
-    popstacktoD  = ['@SP', 'D=M', 'AM=D-1', 'D=M']
     storeDinRN = lambda n: ['@R'+str(n), 'M=D']
 
     if (arg1 not in 
@@ -136,8 +137,6 @@ def translate_pushpop(cmd, arg1, arg2):
 
 def translate_arith(cmd):
     global labelcount
-    pushDtostack = ['@SP', 'A=M', 'M=D', 'D=A+1', '@SP', 'M=D']
-    popstacktoD  = ['@SP', 'D=M', 'AM=D-1', 'D=M']
 
     if cmd in ['add', 'sub', 'and', 'or']:
 
@@ -176,21 +175,17 @@ def translate_arith(cmd):
         raise TranslatorException('Unimplemented or invalid!')
 
 
+def translate_if(arg1):
+    return popstacktoD + ['@'+arg1, 'D;JNE']
+
+
 def doTheThings(path):
     fext = lambda s: s[s.index('.'):]
-    # path is either a file name or a directory name
-    if '.' in path:
-        ext = fext(path)
-        if  ext == '.vm':
-            parser = Parser(path)
-        else:
-            raise TranslatorException('Unrecognized file extension "'+ext+'"')
-#    else:
-#        isdir = True
-#        commands = []
-#        for fname in os.listdir(path):
-#            if fext(fname) == '.vm':
-#                commands += read_and_tokenize(path+fname)
+
+    if '.' not in path or fext(path) != ".vm":
+        raise TranslatorException('Bad file name')
+
+    parser = Parser(path)
 
     assem_out = []
     print(path)
@@ -199,13 +194,18 @@ def doTheThings(path):
     while parser.advance():
         print('translating ', end='')
         print(parser.currcmd, end='...')
-
         cmdtype = parser.commandType()
 
         if cmdtype == C_ARITHMETIC:
             assem_out += translate_arith(parser.arg1())
         elif cmdtype in [C_PUSH, C_POP]:
             assem_out += translate_pushpop(cmdtype, parser.arg1(), parser.arg2())
+        elif cmdtype == C_LABEL:
+            assem_out += ['('+parser.arg1()+')']
+        elif cmdtype == C_GOTO:
+            assem_out += ['@'+parser.arg1(), '0;JMP']
+        elif cmdtype == C_IF:
+            assem_out += translate_if(parser.arg1())
         else:
             return "command unimplemented"
 

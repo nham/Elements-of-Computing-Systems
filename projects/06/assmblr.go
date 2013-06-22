@@ -3,6 +3,8 @@ package main
 import (
     "fmt"
     "os"
+    "io/ioutil"
+    "strings"
 )
 
 type SymbolTable struct {
@@ -52,9 +54,80 @@ func initSymbolTable() SymbolTable {
     }
 }
 
-func doTheThings(args string) {
+func tokenizeLine(line string) []string {
+    punct := [...]string{"@", "=", ";", "(", ")"}
+    whitespace := [...]string{" ", "\t"}
+
+    end := len(line) - 1
+    commentPos := strings.Index(line, "//")
+    if commentPos > -1 {
+        end = commentPos
+    }
+
+    var start int
+    var tokens []string
+
+    for i, c := range line[:end] {
+        skip := false
+        for _, v := range whitespace {
+            if string(c) == v {
+                if start < i {
+                    tokens = append(tokens, line[start:i])
+                }
+
+                start = i + 1
+                skip = true
+                break
+            }
+        }
+
+        if skip == true {
+            break
+        }
+
+        for _, v := range punct {
+            if string(c) == v {
+                if start < i {
+                    tokens = append(tokens, line[start:i])
+                }
+
+                tokens = append(tokens, string(c))
+                start = i + 1
+                break
+            }
+        }
+
+    }
+
+    if start < end {
+        tokens = append(tokens, line[start:end])
+    }
+
+    return tokens
+
+}
+
+func readAndTokenize(fname string) [][]string {
+    content, _ := ioutil.ReadFile(fname)
+    lines := strings.Split(string(content), "\n")
+
+    for i := range lines {
+        if len(lines[i]) > 0 {
+            tokens := tokenizeLine(lines[i])
+            fmt.Println(tokens)
+        }
+    }
+
+    return make([][]string, 5)
+
+}
+
+func doTheThings(fname string) {
     symtab := initSymbolTable()
     fmt.Println(symtab)
+
+    fmt.Println(readAndTokenize(fname))
+
 }
 
 func main() {

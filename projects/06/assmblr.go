@@ -107,26 +107,94 @@ func tokenizeLine(line string) []string {
 
 }
 
+const (
+    A_COMMAND int = iota
+    C_COMMAND int = iota
+    L_COMMAND int = iota
+)
+
+type HackCommand struct {
+    cmdType int
+    tokens []string
+}
+
+func (hc HackCommand) symbol() string {
+    if hc.cmdType == C_COMMAND {
+        // error or something
+        return ""
+    }
+    return hc.tokens[1]
+}
+
+func (hc HackCommand) dest() string {
+    if hc.cmdType != C_COMMAND {
+        // error or something
+        return ""
+    }
+    return hc.tokens[0]
+}
+
+func (hc HackCommand) comp() string {
+    if hc.cmdType != C_COMMAND {
+        // error or something
+        return ""
+    }
+    return hc.tokens[2]
+}
+
+func (hc HackCommand) jump() string {
+    if hc.cmdType != C_COMMAND {
+        // error or something
+        return ""
+    }
+    return hc.tokens[4]
+}
+
+func createHCFromTokens(tokens []string) *HackCommand {
+    var cmdType int
+
+    switch tokens[0] {
+        case "@":
+            cmdType = A_COMMAND
+        case "(":
+            cmdType = L_COMMAND
+        default:
+            cmdType = C_COMMAND
+    }
+
+    return &HackCommand{
+        cmdType: cmdType,
+        tokens: tokens,
+    }
+}
+
+
+// Reads commands from the input file, each line corresponding to a
+// command. The lines are tokenized into a slice
+// Comments and blank lines are filtered out.
 func readAndTokenize(fname string) [][]string {
     content, _ := ioutil.ReadFile(fname)
     lines := strings.Split(string(content), "\n")
 
+    var tokenizedCmds [][]string
+
     for i := range lines {
         if len(lines[i]) > 0 {
-            tokens := tokenizeLine(lines[i])
-            fmt.Println(tokens)
+            tokenizedCmds = append(tokenizedCmds, tokenizeLine(lines[i]))
         }
     }
 
-    return make([][]string, 5)
-
+    return tokenizedCmds
 }
 
 func doTheThings(fname string) {
     symtab := initSymbolTable()
-    fmt.Println(symtab)
+    commands := readAndTokenize(fname)
 
-    fmt.Println(readAndTokenize(fname))
+    for i := range commands {
+        cmd := createHCFromTokens(commands[i])
+        fmt.Println(cmd)
+    }
 
 }
 
@@ -134,5 +202,4 @@ func main() {
     if len(os.Args) == 2 {
         doTheThings(os.Args[1])
     }
-
 }

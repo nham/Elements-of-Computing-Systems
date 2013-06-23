@@ -5,6 +5,7 @@ import (
     "os"
     "io/ioutil"
     "strings"
+    "strconv"
 )
 
 var destLookup map[string]string = map[string]string{
@@ -67,15 +68,47 @@ func C_CMDToBin(hc *HackCommand) string {
     if hc.tokens[1] == "=" {
         dest = destLookup[hc.tokens[0]]
         compOff = 2
+    } else {
+        dest = destLookup["null"]
     }
 
     comp = compLookup[hc.tokens[compOff]]
 
     if len(hc.tokens) > compOff+1 {
         jump = jumpLookup[hc.tokens[compOff+2]]
+    } else {
+        jump = jumpLookup["null"]
     }
 
-    return dest+comp+jump
+    return "111"+dest+comp+jump
+}
+
+func L_CMDToBin(hc *HackCommand, st *SymbolTable, i uint) {
+    symbol := hc.tokens[1]
+
+    if !st.contains(symbol) {
+        st.setEntry(symbol, i)
+    } else {
+        // error, I assume, trying to redefine the label.
+    }
+}
+
+func A_CMDToBin(hc *HackCommand, st *SymbolTable) (string, bool) {
+    // its either a digit, so parse it directly
+    // or a symbol, so look up in the symbol table
+    symbol := hc.tokens[1]
+    i, err := strconv.ParseInt(symbol, 10, 0)
+    redo := false
+
+    if err != nil {
+        if st.contains(symbol) {
+            i = int64(st.table[symbol])
+        } else {
+            redo = true
+        }
+    }
+
+    return fmt.Sprintf("%016v", strconv.FormatInt(i, 2)), redo
 }
 
 
@@ -153,8 +186,9 @@ func tokenizeLine(line string) []string {
             }
         }
 
+
         if skip == true {
-            break
+            continue
         }
 
         for _, v := range punct {
@@ -168,7 +202,6 @@ func tokenizeLine(line string) []string {
                 break
             }
         }
-
     }
 
     if start < end {
@@ -188,38 +221,6 @@ const (
 type HackCommand struct {
     cmdType int
     tokens []string
-}
-
-func (hc HackCommand) symbol() string {
-    if hc.cmdType == C_COMMAND {
-        // error or something
-        return ""
-    }
-    return hc.tokens[1]
-}
-
-func (hc HackCommand) dest() string {
-    if hc.cmdType != C_COMMAND {
-        // error or something
-        return ""
-    }
-    return hc.tokens[0]
-}
-
-func (hc HackCommand) comp() string {
-    if hc.cmdType != C_COMMAND {
-        // error or something
-        return ""
-    }
-    return hc.tokens[2]
-}
-
-func (hc HackCommand) jump() string {
-    if hc.cmdType != C_COMMAND {
-        // error or something
-        return ""
-    }
-    return hc.tokens[4]
 }
 
 func createHCFromTokens(tokens []string) *HackCommand {
@@ -261,36 +262,53 @@ func readAndTokenize(fname string) [][]string {
     return tokenizedCmds
 }
 
-func doTheThings(fname string) {
-    symtab := initSymbolTable()
-    fmt.Println(symtab)
-    commands := readAndTokenize(fname)
-    fmt.Println(commands)
-    fmt.Println("################")
-
-    for i := range commands {
-        cmd := createHCFromTokens(commands[i])
-        fmt.Println("  command:", cmd)
-
-        switch cmd.cmdType {
-            case A_COMMAND:
-                symbol := cmd.symbol()
-                fmt.Println(symbol)
-            case C_COMMAND:
-                fmt.Println(C_CMDToBin(cmd))
-            case L_COMMAND:
-                symbol := cmd.symbol()
-                fmt.Println(symbol)
-        }
-
-        fmt.Println("--------------")
-
-    }
-
-}
-
 func main() {
     if len(os.Args) == 2 {
-        doTheThings(os.Args[1])
+        fname := os.Args[1]
+        symtab := initSymbolTable()
+        commands := readAndTokenize(fname)
+        var mulligan []uint
+        var machineCode []string
+
+        var icount uint = 0 // the index of the *next* command
+
+        for i := range commands {
+            cmd := createHCFromTokens(commands[i])
+            fmt.Println("  command:", cmd)
+
+            bin, redo := "", false
+            switch cmd.cmdType {
+                case A_COMMAND:
+                    bin, redo = A_CMDToBin(cmd, &symtab)
+
+                    // we may be trying to load a symbol whose address
+                    // has not yet been encountered (hence assigned) by the assembler
+                    // we'll have to do this again to get the actual address
+                    if redo == true {
+                        mulligan = append(mulligan, icount)
+                    }
+
+                    icount += 1
+                case L_COMMAND:
+                    L_CMDToBin(cmd, &symtab, icount)
+                case C_COMMAND:
+                    bin = C_CMDToBin(cmd)
+                    icount += 1
+            }
+
+            if bin != "" {
+                machineCode = append(machineCode, bin)
+            }
+        }
+
+        fmt.Println(symtab)
+
+        for _, i := range mulligan {
+           bin, _ := A_CMDToBin(createHCFromTokens(commands[i]), &symtab)
+           fmt.Println(i, bin)
+           machineCode[i] = bin
+        }
+
+        fmt.Println(machineCode)
     }
 }

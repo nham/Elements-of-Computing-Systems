@@ -93,22 +93,23 @@ func L_CMDToBin(hc *HackCommand, st *SymbolTable, i uint) {
     }
 }
 
-func A_CMDToBin(hc *HackCommand, st *SymbolTable) (string, bool) {
+func A_CMDToBin(hc *HackCommand, st *SymbolTable, counter func() int) string  {
     // its either a digit, so parse it directly
     // or a symbol, so look up in the symbol table
     symbol := hc.tokens[1]
     i, err := strconv.ParseInt(symbol, 10, 0)
-    redo := false
 
     if err != nil {
         if st.contains(symbol) {
             i = int64(st.table[symbol])
         } else {
-            redo = true
+            newi := counter()
+            st.setEntry(symbol, uint(newi))
+            i = int64(newi)
         }
     }
 
-    return fmt.Sprintf("%016v", strconv.FormatInt(i, 2)), redo
+    return fmt.Sprintf("%016v", strconv.FormatInt(i, 2))
 }
 
 
@@ -223,7 +224,7 @@ type HackCommand struct {
     tokens []string
 }
 
-func createHCFromTokens(tokens []string) *HackCommand {
+func createHC(tokens []string) *HackCommand {
     var cmdType int
 
     switch tokens[0] {
@@ -262,37 +263,59 @@ func readAndTokenize(fname string) [][]string {
     return tokenizedCmds
 }
 
+func makeCounter(start, inc int) func() int {
+    start -= 1
+    return func() int {
+        start += inc
+        return start
+    }
+}
+
+func createHCs(cmds [][]string) [](*HackCommand) {
+    hcs := make([](*HackCommand), len(cmds))
+    for i := 0; i < len(cmds); i++ {
+        hcs[i] = createHC(cmds[i])
+    }
+
+    return hcs
+}
+
 func main() {
     if len(os.Args) == 2 {
         fname := os.Args[1]
         symtab := initSymbolTable()
-        commands := readAndTokenize(fname)
-        var mulligan []uint
-        var machineCode []string
+        commands := createHCs(readAndTokenize(fname))
 
         var icount uint = 0 // the index of the *next* command
 
+        // pass 1: add labels to symbol table
         for i := range commands {
-            cmd := createHCFromTokens(commands[i])
+            cmd := commands[i]
+
+            if commands[i].cmdType == L_COMMAND {
+                L_CMDToBin(cmd, &symtab, icount)
+            } else {
+                icount += 1
+            }
+        }
+
+        var machineCode []string
+        varCounter := makeCounter(16, 1)
+        icount = 0
+
+        for i := range commands {
+            cmd := commands[i]
             fmt.Println("  command:", cmd)
 
-            bin, redo := "", false
+            bin := ""
             switch cmd.cmdType {
                 case A_COMMAND:
-                    bin, redo = A_CMDToBin(cmd, &symtab)
-
-                    // we may be trying to load a symbol whose address
-                    // has not yet been encountered (hence assigned) by the assembler
-                    // we'll have to do this again to get the actual address
-                    if redo == true {
-                        mulligan = append(mulligan, icount)
-                    }
-
+                    bin = A_CMDToBin(cmd, &symtab, varCounter)
+                    fmt.Println(bin)
                     icount += 1
-                case L_COMMAND:
-                    L_CMDToBin(cmd, &symtab, icount)
                 case C_COMMAND:
                     bin = C_CMDToBin(cmd)
+                    fmt.Println(bin)
                     icount += 1
             }
 
@@ -301,14 +324,5 @@ func main() {
             }
         }
 
-        fmt.Println(symtab)
-
-        for _, i := range mulligan {
-           bin, _ := A_CMDToBin(createHCFromTokens(commands[i]), &symtab)
-           fmt.Println(i, bin)
-           machineCode[i] = bin
-        }
-
-        fmt.Println(machineCode)
     }
 }

@@ -7,6 +7,78 @@ import (
     "strings"
 )
 
+var destLookup map[string]string = map[string]string{
+    "null": "000",
+    "M":   "001",
+    "D":   "010",
+    "MD":  "011",
+    "A":   "100",
+    "AM":  "101",
+    "AD":  "110",
+    "AMD": "111",
+}
+
+var compLookup map[string]string = map[string]string{
+    "0":   "0101010",
+    "1":   "0111111",
+    "-1":  "0111010",
+    "D":   "0001100",
+    "A":   "0110000",
+    "M":   "1110000",
+    "!D":  "0001101",
+    "!A":  "0110001",
+    "!M":  "1110001",
+    "-D":  "0001111",
+    "-A":  "0110011",
+    "-M":  "0110011",
+    "D+1": "0011111",
+    "A+1": "0110111",
+    "M+1": "1110111",
+    "D-1": "0001110",
+    "A-1": "0110010",
+    "M-1": "1110010",
+    "D+A": "0000010",
+    "D+M": "1000010",
+    "D-A": "0010011",
+    "D-M": "1010011",
+    "A-D": "0000111",
+    "M-D": "1000111",
+    "D&A": "0000000",
+    "D&M": "1000000",
+    "D|A": "0010101",
+    "D|M": "1010101",
+}
+
+var jumpLookup map[string]string = map[string]string{
+    "null": "000",
+    "JGT": "001",
+    "JEQ": "010",
+    "JGE": "011",
+    "JLT": "100",
+    "JNE": "101",
+    "JLE": "110",
+    "JMP": "111",
+}
+
+func C_CMDToBin(hc *HackCommand) string {
+    dest, comp, jump := "", "", ""
+    compOff := 0
+
+    if hc.tokens[1] == "=" {
+        dest = destLookup[hc.tokens[0]]
+        compOff = 2
+    }
+
+    comp = compLookup[hc.tokens[compOff]]
+
+    if len(hc.tokens) > compOff+1 {
+        jump = jumpLookup[hc.tokens[compOff+2]]
+    }
+
+    return dest+comp+jump
+}
+
+
 type SymbolTable struct {
     table map[string]uint
 }
@@ -168,7 +240,6 @@ func createHCFromTokens(tokens []string) *HackCommand {
     }
 }
 
-
 // Reads commands from the input file, each line corresponding to a
 // command. The lines are tokenized into a slice
 // Comments and blank lines are filtered out.
@@ -180,7 +251,10 @@ func readAndTokenize(fname string) [][]string {
 
     for i := range lines {
         if len(lines[i]) > 0 {
-            tokenizedCmds = append(tokenizedCmds, tokenizeLine(lines[i]))
+            tmp := tokenizeLine(lines[i])
+            if len(tmp) > 0 {
+                tokenizedCmds = append(tokenizedCmds, tmp)
+            }
         }
     }
 
@@ -189,11 +263,28 @@ func readAndTokenize(fname string) [][]string {
 
 func doTheThings(fname string) {
     symtab := initSymbolTable()
+    fmt.Println(symtab)
     commands := readAndTokenize(fname)
+    fmt.Println(commands)
+    fmt.Println("################")
 
     for i := range commands {
         cmd := createHCFromTokens(commands[i])
-        fmt.Println(cmd)
+        fmt.Println("  command:", cmd)
+
+        switch cmd.cmdType {
+            case A_COMMAND:
+                symbol := cmd.symbol()
+                fmt.Println(symbol)
+            case C_COMMAND:
+                fmt.Println(C_CMDToBin(cmd))
+            case L_COMMAND:
+                symbol := cmd.symbol()
+                fmt.Println(symbol)
+        }
+
+        fmt.Println("--------------")
+
     }
 
 }

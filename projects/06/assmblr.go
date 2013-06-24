@@ -6,6 +6,7 @@ import (
     "io/ioutil"
     "strings"
     "strconv"
+    "bufio"
 )
 
 var destLookup map[string]string = map[string]string{
@@ -80,7 +81,7 @@ func C_CMDToBin(hc *HackCommand) string {
         jump = jumpLookup["null"]
     }
 
-    return "111"+dest+comp+jump
+    return "111"+comp+dest+jump
 }
 
 func L_CMDToBin(hc *HackCommand, st *SymbolTable, i uint) {
@@ -299,30 +300,34 @@ func main() {
             }
         }
 
-        var machineCode []string
         varCounter := makeCounter(16, 1)
         icount = 0
+        newFName := fname[:strings.Index(fname, ".")] + ".hack"
+        fo, _ := os.Create(newFName)
+
+        write := bufio.NewWriter(fo)
 
         for i := range commands {
             cmd := commands[i]
-            fmt.Println("  command:", cmd)
 
             bin := ""
             switch cmd.cmdType {
                 case A_COMMAND:
                     bin = A_CMDToBin(cmd, &symtab, varCounter)
-                    fmt.Println(bin)
                     icount += 1
                 case C_COMMAND:
                     bin = C_CMDToBin(cmd)
-                    fmt.Println(bin)
                     icount += 1
             }
 
             if bin != "" {
-                machineCode = append(machineCode, bin)
+                if _, err := write.WriteString(bin+"\n"); err != nil {
+                    panic(err)
+                }
+
             }
         }
 
+        write.Flush()
     }
 }

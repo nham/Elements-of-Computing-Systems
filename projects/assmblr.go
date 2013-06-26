@@ -3,10 +3,10 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strconv"
 	"strings"
+    "wabbo.org/nand2tetris_lib"
 )
 
 var destLookup map[string]string = map[string]string{
@@ -241,27 +241,6 @@ func createHC(tokens []string) *HackCommand {
 	}
 }
 
-// Reads commands from the input file, each line corresponding to a
-// command. The lines are tokenized into a slice
-// Comments and blank lines are filtered out.
-func readAndTokenize(fname string, tokenizer func(line string) []string) [][]string {
-	content, _ := ioutil.ReadFile(fname)
-	lines := strings.Split(string(content), "\n")
-
-	var tokenizedCmds [][]string
-
-	for i := range lines {
-		if len(lines[i]) > 0 {
-			tmp := tokenizer(lines[i])
-			if len(tmp) > 0 {
-				tokenizedCmds = append(tokenizedCmds, tmp)
-			}
-		}
-	}
-
-	return tokenizedCmds
-}
-
 func makeCounter(start, inc int) func() int {
 	start -= 1
 	return func() int {
@@ -283,7 +262,7 @@ func main() {
 	if len(os.Args) == 2 {
 		fname := os.Args[1]
 		symtab := initSymbolTable()
-		commands := createHCs(readAndTokenize(fname, tokenizeLine))
+		commands := createHCs(nand2tetris_lib.ReadAndTokenize(fname, tokenizeLine))
 
 		var icount uint = 0 // the index of the *next* command
 

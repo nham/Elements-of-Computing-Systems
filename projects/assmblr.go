@@ -244,7 +244,7 @@ func createHC(tokens []string) *HackCommand {
 // Reads commands from the input file, each line corresponding to a
 // command. The lines are tokenized into a slice
 // Comments and blank lines are filtered out.
-func readAndTokenize(fname string) [][]string {
+func readAndTokenize(fname string, tokenizer func(line string) []string) [][]string {
 	content, _ := ioutil.ReadFile(fname)
 	lines := strings.Split(string(content), "\n")
 
@@ -252,7 +252,7 @@ func readAndTokenize(fname string) [][]string {
 
 	for i := range lines {
 		if len(lines[i]) > 0 {
-			tmp := tokenizeLine(lines[i])
+			tmp := tokenizer(lines[i])
 			if len(tmp) > 0 {
 				tokenizedCmds = append(tokenizedCmds, tmp)
 			}
@@ -283,7 +283,7 @@ func main() {
 	if len(os.Args) == 2 {
 		fname := os.Args[1]
 		symtab := initSymbolTable()
-		commands := createHCs(readAndTokenize(fname))
+		commands := createHCs(readAndTokenize(fname, tokenizeLine))
 
 		var icount uint = 0 // the index of the *next* command
 

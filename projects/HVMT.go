@@ -4,7 +4,7 @@ import (
 	"os"
     "fmt"
     "strings"
-	//"bufio"
+	"bufio"
     "wabbo.org/nand2tetris_lib"
 )
 
@@ -19,6 +19,8 @@ const (
     C_RETURN int = iota
     C_CALL int = iota
 )
+
+var popstacktoD []string  = []string{"@SP", "D=M", "AM=D-1", "D=M"]
 
 func tokenizeLine(line string) []string {
 	end := len(line) - 1
@@ -55,32 +57,64 @@ func typeofCommand(tokens []string) int {
     }
 }
 
+func translateCommand(command []string) (string, bool) {
+    asm := ""
+    switch typeofCommand(command) {
+        case C_ARITHMETIC:
+            asm = translateArith(cmd)
+        case C_PUSH:
+            fallthrough
+        case C_POP:
+            // not sure if works :)
+            asm = translatePushPop(command...)
+        case C_LABEL:
+            asm = translateLabel(command[1])
+        case C_GOTO:
+            asm = translateGoto(command[1])
+        case C_IF:
+            asm = translateIf(command[1])
+        default:
+            fmt.Println("command unimplemented")
+            return "", false
+    }
+
+    return asm, true
+}
+
+func translateLabel(symbol string) string {
+    return "("+symbol+")"
+}
+
+func translateIf(symbol string) string {
+    return append(popstacktoD, []string{"@"+symbol, "D;JNE"}...)
+}
+
+func translateGoto(symbol string) string {
+    return []string{"@"+symbol, "0;JMP"}
+}
+
+func translatePushPop(command, segment, index string) string {
+    return ""
+}
+
 
 func main() {
 	if len(os.Args) == 2 {
 		path := os.Args[1]
         newFName := path[:strings.Index(path, ".")] + ".asm"
-        fmt.Println(newFName)
+		fo, _ := os.Create(newFName)
+		writer := bufio.NewWriter(fo)
 
         cmdtoks := nand2tetris_lib.ReadAndTokenize(path, tokenizeLine)
+        var cmd []string
         for i := range cmdtoks {
             fmt.Println(cmdtoks[i], typeofCommand(cmdtoks[i]))
+            asm, success := translateCommand(cmdtoks[i])
 
-            switch typeofCommand(cmdtoks[i]) {
-                case C_ARITHMETIC:
-                    //writer.write_arith(parser.arg1())
-                case C_PUSH:
-                    fallthrough
-                case C_POP:
-                    //writer.write_pushpop(cmdtype, parser.arg1(), parser.arg2())
-                case C_LABEL:
-                    //writer.write_label(parser.arg1())
-                case C_GOTO:
-                    //writer.write_goto(parser.arg1())
-                case C_IF:
-                    //writer.write_if(parser.arg1())
-                default:
-                    //fmt.Println("command unimplemented")
+            if success {
+                if _, err := writer.WriteString(asm + "\n"); err != nil {
+                    panic(err)
+                }
             }
         }
     }

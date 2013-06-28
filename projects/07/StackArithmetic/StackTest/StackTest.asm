@@ -1,7 +1,3 @@
-@256
-D=A
-@SP
-M=D
 @17
 D=A
 @SP
@@ -30,7 +26,7 @@ AM=D-1
 D=M
 @R13
 D=D-M
-@LAB0
+@$LAB0
 D;JEQ
 D=0
 @SP
@@ -39,9 +35,9 @@ M=D
 D=A+1
 @SP
 M=D
-@LAB1
+@$LAB1
 0;JMP
-(LAB0)
+($LAB0)
 D=-1
 @SP
 A=M
@@ -49,7 +45,7 @@ M=D
 D=A+1
 @SP
 M=D
-(LAB1)
+($LAB1)
 @17
 D=A
 @SP
@@ -78,7 +74,7 @@ AM=D-1
 D=M
 @R13
 D=D-M
-@LAB2
+@$LAB2
 D;JEQ
 D=0
 @SP
@@ -87,9 +83,9 @@ M=D
 D=A+1
 @SP
 M=D
-@LAB3
+@$LAB3
 0;JMP
-(LAB2)
+($LAB2)
 D=-1
 @SP
 A=M
@@ -97,7 +93,7 @@ M=D
 D=A+1
 @SP
 M=D
-(LAB3)
+($LAB3)
 @16
 D=A
 @SP
@@ -126,7 +122,7 @@ AM=D-1
 D=M
 @R13
 D=D-M
-@LAB4
+@$LAB4
 D;JEQ
 D=0
 @SP
@@ -135,9 +131,9 @@ M=D
 D=A+1
 @SP
 M=D
-@LAB5
+@$LAB5
 0;JMP
-(LAB4)
+($LAB4)
 D=-1
 @SP
 A=M
@@ -145,7 +141,7 @@ M=D
 D=A+1
 @SP
 M=D
-(LAB5)
+($LAB5)
 @892
 D=A
 @SP
@@ -174,7 +170,7 @@ AM=D-1
 D=M
 @R13
 D=D-M
-@LAB6
+@$LAB6
 D;JLT
 D=0
 @SP
@@ -183,9 +179,9 @@ M=D
 D=A+1
 @SP
 M=D
-@LAB7
+@$LAB7
 0;JMP
-(LAB6)
+($LAB6)
 D=-1
 @SP
 A=M
@@ -193,7 +189,7 @@ M=D
 D=A+1
 @SP
 M=D
-(LAB7)
+($LAB7)
 @891
 D=A
 @SP
@@ -222,7 +218,7 @@ AM=D-1
 D=M
 @R13
 D=D-M
-@LAB8
+@$LAB8
 D;JLT
 D=0
 @SP
@@ -231,9 +227,9 @@ M=D
 D=A+1
 @SP
 M=D
-@LAB9
+@$LAB9
 0;JMP
-(LAB8)
+($LAB8)
 D=-1
 @SP
 A=M
@@ -241,7 +237,7 @@ M=D
 D=A+1
 @SP
 M=D
-(LAB9)
+($LAB9)
 @891
 D=A
 @SP
@@ -270,7 +266,7 @@ AM=D-1
 D=M
 @R13
 D=D-M
-@LAB10
+@$LAB10
 D;JLT
 D=0
 @SP
@@ -279,9 +275,9 @@ M=D
 D=A+1
 @SP
 M=D
-@LAB11
+@$LAB11
 0;JMP
-(LAB10)
+($LAB10)
 D=-1
 @SP
 A=M
@@ -289,7 +285,7 @@ M=D
 D=A+1
 @SP
 M=D
-(LAB11)
+($LAB11)
 @32767
 D=A
 @SP
@@ -318,7 +314,7 @@ AM=D-1
 D=M
 @R13
 D=D-M
-@LAB12
+@$LAB12
 D;JGT
 D=0
 @SP
@@ -327,9 +323,9 @@ M=D
 D=A+1
 @SP
 M=D
-@LAB13
+@$LAB13
 0;JMP
-(LAB12)
+($LAB12)
 D=-1
 @SP
 A=M
@@ -337,7 +333,7 @@ M=D
 D=A+1
 @SP
 M=D
-(LAB13)
+($LAB13)
 @32766
 D=A
 @SP
@@ -366,7 +362,7 @@ AM=D-1
 D=M
 @R13
 D=D-M
-@LAB14
+@$LAB14
 D;JGT
 D=0
 @SP
@@ -375,9 +371,9 @@ M=D
 D=A+1
 @SP
 M=D
-@LAB15
+@$LAB15
 0;JMP
-(LAB14)
+($LAB14)
 D=-1
 @SP
 A=M
@@ -385,7 +381,7 @@ M=D
 D=A+1
 @SP
 M=D
-(LAB15)
+($LAB15)
 @32766
 D=A
 @SP
@@ -414,7 +410,7 @@ AM=D-1
 D=M
 @R13
 D=D-M
-@LAB16
+@$LAB16
 D;JGT
 D=0
 @SP
@@ -423,9 +419,9 @@ M=D
 D=A+1
 @SP
 M=D
-@LAB17
+@$LAB17
 0;JMP
-(LAB16)
+($LAB16)
 D=-1
 @SP
 A=M
@@ -433,7 +429,7 @@ M=D
 D=A+1
 @SP
 M=D
-(LAB17)
+($LAB17)
 @57
 D=A
 @SP

@@ -266,5 +266,6 @@ func main() {
                 }
             }
         }
+		writer.Flush()
     }
 }

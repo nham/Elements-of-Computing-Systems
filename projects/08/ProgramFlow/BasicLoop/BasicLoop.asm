@@ -63,7 +63,7 @@ D=M
 M=D
 @LCL
 D=M
-@0
+@0	
 D=D+A
 @R14
 M=D

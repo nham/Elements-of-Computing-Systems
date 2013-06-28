@@ -95,6 +95,10 @@ func (ct *CommandTranslator) translate(command []string) (string, bool) {
             asm = ct.translateGoto(command[1])
         case C_IF:
             asm = ct.translateIf(command[1])
+        case C_FUNCTION:
+            asm = ct.translateFunc(command[1], command[2])
+        case C_RETURN:
+            asm = ct.translateReturn()
         default:
             fmt.Println("command unimplemented")
             return "", false
@@ -114,6 +118,24 @@ func (ct *CommandTranslator) translateIf(symbol string) string {
 
 func (ct *CommandTranslator) translateGoto(symbol string) string {
     return strings.Join([]string{"@"+symbol, "0;JMP"}, "\n")
+}
+
+func (ct *CommandTranslator) translateReturn() string {
+    return ""
+}
+
+func (ct *CommandTranslator) translateFunc(symbol, numVars string) string {
+    n, _ := strconv.Atoi(numVars)
+    retcmds := make([]string, n + 1)
+    retcmds[0] = ct.translateLabel(symbol)
+
+    pushstr := ct.translatePushPop("push", "constant", "0")
+
+    for i := range retcmds[1:] {
+        retcmds[i+1] = pushstr
+    }
+
+    return strings.Join(retcmds, "\n")
 }
 
 func (ct *CommandTranslator) translatePushPop(command, segment, index string) string {
@@ -157,7 +179,7 @@ func (ct *CommandTranslator) translatePushPop(command, segment, index string) st
     }
 
     var retcmds []string
-    if ct.currCommandType == C_PUSH {
+    if command == "push"{
         if segment == "constant" {
             retcmds = append([]string{ldind, "D=A"}, pushDtostack...)
         } else if dedicated[segment] {
@@ -166,7 +188,7 @@ func (ct *CommandTranslator) translatePushPop(command, segment, index string) st
             retcmds = append([]string{reg, "D=M"}, pushDtostack...)
         }
 
-    } else if ct.currCommandType == C_POP {
+    } else if command == "pop" {
         if dedicated[segment] {
             retcmds = append(append(append(append(popstacktoD, storeDinRN(13)...),
             reg, "D=M", ldind, "D=D+A"),

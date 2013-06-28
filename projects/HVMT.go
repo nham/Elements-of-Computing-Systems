@@ -38,6 +38,7 @@ var pushDtostack []string = []string{"@SP", "A=M", "M=D", "D=A+1", "@SP", "M=D"}
 
 type CommandTranslator struct {
     currCommand *([]string)
+    currCommandType int
     labelCount int
 }
 
@@ -78,8 +79,9 @@ func typeofCommand(tokens []string) int {
 
 func (ct *CommandTranslator) translate(command []string) (string, bool) {
     ct.currCommand = &command
+    ct.currCommandType = typeofCommand(command)
     asm := ""
-    switch typeofCommand(command) {
+    switch ct.currCommandType {
         case C_ARITHMETIC:
             asm = ct.translateArith(command[0])
         case C_PUSH:
@@ -115,7 +117,68 @@ func (ct *CommandTranslator) translateGoto(symbol string) string {
 }
 
 func (ct *CommandTranslator) translatePushPop(command, segment, index string) string {
-    return ""
+    storeDinRN := func(n int) []string { return []string{"@R"+strconv.Itoa(n), "M=D"} }
+    ldind := "@"+index
+
+    reg := ""
+    switch segment {
+        case "local":
+            reg = "@LCL"
+        case "argument":
+            reg = "@ARG"
+        case "this":
+            reg = "@THIS"
+        case "that":
+            reg = "@THAT"
+        default:
+            addr := 0
+            if segment == "pointer" {
+                addr = 3
+            } else if segment == "temp" {
+                addr = 5
+            } else if segment == "static" {
+                addr = 16
+            }
+            ind, _ := strconv.Atoi(index)
+            reg = "@"+strconv.Itoa(addr + ind)
+    }
+
+    dedicated := map[string]bool{
+        "local": true,
+        "argument": true,
+        "this": true,
+        "that": true,
+    }
+
+    fixed := map[string]bool{
+        "pointer": true,
+        "temp": true,
+        "static": true,
+    }
+
+    var retcmds []string
+    if ct.currCommandType == C_PUSH {
+        if segment == "constant" {
+            retcmds = append([]string{ldind, "D=A"}, pushDtostack...)
+        } else if dedicated[segment] {
+            retcmds = append([]string{reg, "D=M", ldind, "A=A+D", "D=M"}, pushDtostack...)
+        } else if fixed[segment] {
+            retcmds = append([]string{reg, "D=M"}, pushDtostack...)
+        }
+
+    } else if ct.currCommandType == C_POP {
+        if dedicated[segment] {
+            retcmds = append(append(append(append(popstacktoD, storeDinRN(13)...),
+            reg, "D=M", ldind, "D=D+A"),
+            storeDinRN(14)...), "@R13", "D=M", "@R14", "A=M", "M=D")
+        } else if fixed[segment] {
+            retcmds = append(popstacktoD, reg, "M=D")
+        }
+
+    }
+
+    return strings.Join(retcmds, "\n")
+
 }
 
 func (ct *CommandTranslator) translateArith(command string) string {

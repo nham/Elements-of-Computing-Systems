@@ -4,6 +4,7 @@ import (
 	"os"
     "fmt"
     "strings"
+    "strconv"
 	"bufio"
     "wabbo.org/nand2tetris_lib"
 )
@@ -22,6 +23,23 @@ const (
 
 var popstacktoD []string = []string{"@SP", "D=M", "AM=D-1", "D=M"}
 var pushDtostack []string = []string{"@SP", "A=M", "M=D", "D=A+1", "@SP", "M=D"}
+
+/* We at least need this label counter to translate arith commands
+ * but more generally, we may need to maintain state while translating
+ * so we should probably make an object, a CommandTranslator, that takes in
+ * the current command and translates into assembly.
+ * So it should at least have a pointer to the current command, along with whatever
+ * tools it needs to translate all commands. Also there should be a method, translate(),
+ * which takes in a tokenized command and returns the ASM.
+ *
+ * But inside translate, we need to figure out what type of command it is. We also need
+ * to pull apart the tokens to call the correct subroutine for translating each command.
+ */
+
+type CommandTranslator struct {
+    currCommand *([]string)
+    labelCount int
+}
 
 func tokenizeLine(line string) []string {
 	end := len(line) - 1
@@ -58,22 +76,23 @@ func typeofCommand(tokens []string) int {
     }
 }
 
-func translateCommand(command []string) (string, bool) {
+func (ct *CommandTranslator) translate(command []string) (string, bool) {
+    ct.currCommand = &command
     asm := ""
     switch typeofCommand(command) {
         case C_ARITHMETIC:
-            asm = translateArith(command[0])
+            asm = ct.translateArith(command[0])
         case C_PUSH:
             fallthrough
         case C_POP:
             // not sure if works :)
-            asm = translatePushPop(command[0], command[1], command[2])
+            asm = ct.translatePushPop(command[0], command[1], command[2])
         case C_LABEL:
-            asm = translateLabel(command[1])
+            asm = ct.translateLabel(command[1])
         case C_GOTO:
-            asm = translateGoto(command[1])
+            asm = ct.translateGoto(command[1])
         case C_IF:
-            asm = translateIf(command[1])
+            asm = ct.translateIf(command[1])
         default:
             fmt.Println("command unimplemented")
             return "", false
@@ -82,20 +101,24 @@ func translateCommand(command []string) (string, bool) {
     return asm, true
 }
 
-func translateLabel(symbol string) string {
+func (ct *CommandTranslator) translateLabel(symbol string) string {
     return "("+symbol+")"
 }
 
-func translateIf(symbol string) string {
+func (ct *CommandTranslator) translateIf(symbol string) string {
     cmds := append(popstacktoD, "@"+symbol, "D;JNE")
     return strings.Join(cmds, "\n")
 }
 
-func translateGoto(symbol string) string {
+func (ct *CommandTranslator) translateGoto(symbol string) string {
     return strings.Join([]string{"@"+symbol, "0;JMP"}, "\n")
 }
 
-func translateArith(command string) string {
+func (ct *CommandTranslator) translatePushPop(command, segment, index string) string {
+    return ""
+}
+
+func (ct *CommandTranslator) translateArith(command string) string {
     switch command {
         case "add":
             fallthrough
@@ -104,24 +127,24 @@ func translateArith(command string) string {
         case "and":
             fallthrough
         case "or":
-            return translateArithBinary(command)
+            return ct.translateArithBinary(command)
         case "eq":
             fallthrough
         case "lt":
             fallthrough
         case "gt":
-            return translateArithCompare(command)
+            return ct.translateArithCompare(command)
         case "neg":
             fallthrough
         case "not":
-            return translateArithUnary(command)
+            return ct.translateArithUnary(command)
         default:
             return ""
     }
 }
 
 
-func translateArithBinary(command string) string {
+func (ct *CommandTranslator) translateArithBinary(command string) string {
     lookup := map[string]string{
         "add": "D+M",
         "sub": "M-D",
@@ -134,21 +157,20 @@ func translateArithBinary(command string) string {
         "\n")
 }
 
-func translateArithCompare(command string) string {
-    /*
-            lab1 = '$LAB'+str(self.labelcount)
-            lab2 = '$LAB'+str(self.labelcount+1)
-            self.labelcount += 2
+func (ct *CommandTranslator) translateArithCompare(command string) string {
+    lab1 := "$LAB" + strconv.Itoa(ct.labelCount)
+    lab2 := "$LAB"+strconv.Itoa(ct.labelCount+1)
+    ct.labelCount += 2
 
-            return (popstacktoD + ['@R13', 'M=D'] + popstacktoD 
-                    + ['@R13', 'D=D-M', '@'+lab1, 'D;J'+cmd.upper(), 'D=0']
-                    + pushDtostack + ['@'+lab2, '0;JMP', '('+lab1+')', 'D=-1']
-                    + pushDtostack + ['('+lab2+')'])
-                    */
-    return ""
+    // I no longer recall what these do. lol?
+    tmp := append(append(popstacktoD, "@R13", "M=D"), popstacktoD...)
+    tmp = append(tmp, "@R13", "D=D-M", "@"+lab1, "D;J"+strings.ToUpper(command), "D=0")
+    tmp = append(append(tmp, pushDtostack...), "@"+lab2, "0;JMP", "("+lab1+")", "D=-1")
+    tmp = append(append(tmp, pushDtostack...), "("+lab2+")")
+    return strings.Join(tmp, "\n")
 }
 
-func translateArithUnary(command string) string {
+func (ct *CommandTranslator) translateArithUnary(command string) string {
     lookup := map[string]string{
         "neg": "!D",
         "not": "-D",
@@ -159,11 +181,6 @@ func translateArithUnary(command string) string {
         "\n")
 }
 
-func translatePushPop(command, segment, index string) string {
-    return ""
-}
-
-
 func main() {
 	if len(os.Args) == 2 {
 		path := os.Args[1]
@@ -171,10 +188,14 @@ func main() {
 		fo, _ := os.Create(newFName)
 		writer := bufio.NewWriter(fo)
 
+        translator := CommandTranslator{
+            labelCount: 0,
+        }
+
         cmdtoks := nand2tetris_lib.ReadAndTokenize(path, tokenizeLine)
         for i := range cmdtoks {
             fmt.Println(cmdtoks[i], typeofCommand(cmdtoks[i]))
-            asm, success := translateCommand(cmdtoks[i])
+            asm, success := translator.translate(cmdtoks[i])
 
             if success {
                 if _, err := writer.WriteString(asm + "\n"); err != nil {

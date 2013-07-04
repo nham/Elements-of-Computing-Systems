@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
     "wabbo.org/nand2tetris_lib"
+    "unicode/utf8"
 )
 
 var destLookup map[string]string = map[string]string{
@@ -67,6 +68,8 @@ const (
 	C_COMMAND
 	L_COMMAND
 )
+
+const eof = -1
 
 type HackCommand struct {
 	cmdType int
@@ -171,6 +174,32 @@ func A_CMDToBin(hc *HackCommand, st *SymbolTable, counter func() int) string {
 	}
 
 	return fmt.Sprintf("%016v", strconv.FormatInt(i, 2))
+}
+
+// Inspired/thieved from text/template/parse package. See lex.go or Rob Pike's talk
+type lexer struct {
+    input string
+    pos int
+    start int
+}
+
+// return next rune from the input, advancing the lexer position appropriately
+func (l *lexer) next() rune {
+    if l.pos >= len(l.input) {
+        return eof
+    }
+    r, w := utf8.DecodeRuneInString(l.input[l.pos:])
+    l.pos += w
+    return r
+}
+
+// In the parse package this uses a channel, but I haven't learned about those
+// yet so I am restricting myself to just returning them. The lexing function
+// will be slightly uglier as a result :P
+func (l *lexer) emit() string {
+    ret := l.input[l.start:l.pos]
+    l.start = l.pos
+    return ret
 }
 
 

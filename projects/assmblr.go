@@ -244,14 +244,6 @@ func createHC(tokens []string) *HackCommand {
 	}
 }
 
-func makeCounter(start, inc int) func() int {
-	start -= 1
-	return func() int {
-		start += inc
-		return start
-	}
-}
-
 func createHCs(cmds [][]string) [](*HackCommand) {
 	hcs := make([](*HackCommand), len(cmds))
 	for i := 0; i < len(cmds); i++ {
@@ -280,8 +272,8 @@ func main() {
 			}
 		}
 
-		varCounter := makeCounter(16, 1)
-		icount = 0
+        counter := 16
+		varCounter := func() int { counter += 1; return counter-1 }
 		newFName := fname[:strings.Index(fname, ".")] + ".hack"
 		fo, _ := os.Create(newFName)
 
@@ -294,10 +286,8 @@ func main() {
 			switch cmd.cmdType {
 			case A_COMMAND:
 				bin = A_CMDToBin(cmd, &symtab, varCounter)
-				icount += 1
 			case C_COMMAND:
 				bin = C_CMDToBin(cmd)
-				icount += 1
 			}
 
 			if bin != "" {

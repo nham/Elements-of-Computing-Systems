@@ -176,11 +176,17 @@ func A_CMDToBin(hc *HackCommand, st *SymbolTable, counter func() int) string {
 	return fmt.Sprintf("%016v", strconv.FormatInt(i, 2))
 }
 
-// Inspired/thieved from text/template/parse package. See lex.go or Rob Pike's talk
+// Inspired by/thieved from text/template/parse package. See lex.go or Rob Pike's talk
+const commentMarker = "//"
+
+type stateFn func(*lexer) stateFn
+
 type lexer struct {
+    state stateFn
     input string
     pos int
     start int
+    width int  // width of last rune read from input
 }
 
 // return next rune from the input, advancing the lexer position appropriately
@@ -189,7 +195,18 @@ func (l *lexer) next() rune {
         return eof
     }
     r, w := utf8.DecodeRuneInString(l.input[l.pos:])
+    l.width = w
     l.pos += w
+    return r
+}
+
+func (l *lexer) backup() {
+    l.pos -= l.width
+}
+
+func (l *lexer) peek() rune {
+    r := l.next()
+    l.backup()
     return r
 }
 
@@ -202,6 +219,63 @@ func (l *lexer) emit() string {
     return ret
 }
 
+func (l *lexer) ignore() {
+    l.start = l.pos
+}
+
+func lexSpace(l *lexer) stateFn {
+    for isSpace(l.peek()) {
+        l.next()
+    }
+    l.ignore()
+    return lexDefault
+}
+
+func lexDefault(l *lexer) stateFn {
+    for {
+        if strings.HasPrefix(l.input[l.start:l.pos], commentMarker) {
+            return lexComment
+        }
+
+        switch r := l.next(); {
+        case r == eof || isEndOfLine(r):
+            return nil
+        case isSpace(r):
+            return lexSpace
+        case r == '@':
+            return lexACommand
+        case r == '(':
+        }
+    }
+}
+
+func lexACommand(l *lexer) stateFn {
+    l.emit()
+
+    // the _value_ of an A instruction is either a sequence of digits (interpreted as 
+    // a number) or a *symbol*, which is a sequence of letters (a-z, A-Z), numbers (0-9),
+    // or any of the following: _ . $ :
+    // provided that the sequence does not begin with a digit.
+
+    // TODO: implement. use acceptRun from Rob Pike?
+    return lexDefault
+
+}
+
+func lexComment(l *lexer) stateFn {
+    for !isEndOfLine(l.peek()) {
+        l.next()
+    }
+    return lexDefault
+}
+
+func isEndOfLine(r rune) bool {
+    return r == '\r' || r == '\n'
+}
+
+func isSpace(r rune) bool {
+    return r == ' ' || r == '\t'
+}
 
 func tokenizeLine(line string) []string {
 	punct := [...]string{"@", "=", ";", "(", ")"}

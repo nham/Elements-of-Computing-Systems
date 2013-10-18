@@ -1,4 +1,5 @@
 import qualified Data.Map as Map
+import Control.Applicative
 
 -- lookups
 dests = Map.fromList [("null", "000"), ("M", "001"), ("D", "010"), ("MD", "011"),
@@ -53,13 +54,96 @@ isNat [] = False
 isNat xs = all (`elem` ['0'..'9']) xs
 
 -- doesnt handle translating A-instructions with symbols
-toBinary :: HackInstruction -> SymbolTable -> String
-toBinary (A v) st = if (isNat v) 
+toBinary :: SymbolTable -> HackInstruction -> String
+toBinary st (A v) = if (isNat v) 
                         then padStr (decToBin v) 16 '0'
                         else let (Just n) = Map.lookup v st
                              in show n
 
-toBinary (C c d j) _ = let Just cStr = Map.lookup c comps 
+toBinary _ (C c d j) = let Just cStr = Map.lookup c comps 
                            Just dStr = Map.lookup d dests
                            Just jStr = Map.lookup j jumps
                        in "111" ++ cStr ++ dStr ++ jStr
+
+
+translate :: [HackInstruction] -> [String]
+translate = map (toBinary symTable)
+
+
+-- Parsing! --
+
+newtype Parser a = P (String -> [(a, String)])
+
+instance Functor Parser where
+    fmap f (P v) = P (\s -> [(f x, s') | (x, s') <- v s])
+
+instance Applicative Parser where
+    pure x = P (\s -> [(x, s)])
+
+    (P g) <*> (P h) = P (\s -> [(f a, rest) 
+                                | (f, rem) <- g s
+                                , (a, rest) <- h rem
+                                ])
+
+instance Alternative Parser where
+    empty = P (const [])
+    (P j) <|> (P k) = P (\s -> j s ++ k s)
+
+
+unP :: Parser a -> (String -> [(a, String)])
+unP (P f) = f
+
+{-
+AParser :: Parser HackInstruction
+AParser x
+-}
+
+getIfTrue :: (Char -> Bool) -> Parser Char
+getIfTrue p = P (\s -> case s of
+                            [] -> []
+                            (x:xs) -> if p x
+                                        then [(x, xs)]
+                                        else [])
+
+getIfTrueN :: (Char -> Bool) -> Int -> Parser String
+getIfTrueN p 1 = (\c -> [c]) <$> getIfTrue p
+getIfTrueN p n = (:) <$> (getIfTrue p) <*> (getIfTrueN p (n-1))
+    where z = getIfTrue p
+
+
+getOneOfSet :: String -> Parser Char
+getOneOfSet cs = getIfTrue (`elem` cs)
+
+getC x = getIfTrue (== x)
+
+
+-- takes a Parser and runs it n times in a row.
+parseN :: Int -> Parser a -> Parser [a]
+parseN 1 p = (:[]) <$> p
+parseN n p = (:) <$> p <$> parseN (n-1) p
+
+
+getDigit :: Parser Char
+getDigit = getOneOfSet ['0'..'9']
+getLower = getOneOfSet ['a'..'z']
+getUpper = getOneOfSet ['A'..'Z']
+getSpecial = getOneOfSet ['_', '.', '$', ':']
+
+getNonDigit = getLower <|> getUpper <|> getSpecial
+getSymbolChar = getNonDigit <|> getDigit
+
+getSymbol = (:) <$> getNonDigit <*> many getSymbolChar
+
+getConstant = many getDigit
+
+-- same as regex's ".*". It matches any string.
+getDot = P (\s -> case s of
+    [] -> []
+    (x:xs) -> [(x, xs)])
+
+getDotStar = many getDot
+
+
+getComment = (:) <$> (f <$> getSlash <*> getSlash) <*> (many getDotStar)
+    where f s t = s:t:""
+          getSlash = getC '/'

@@ -24,6 +24,7 @@ jumps = Map.fromList [("null", "000"), ("JGT", "001"), ("JEQ", "010"),
 
 data HackInstruction = A { value :: String} 
                      | C { comp :: String, dest :: String, jump :: String}
+                       deriving(Show)
 type SymbolTable = Map.Map String Int
 
 symTable :: SymbolTable
@@ -93,10 +94,13 @@ instance Alternative Parser where
 unP :: Parser a -> (String -> [(a, String)])
 unP (P f) = f
 
-{-
-AParser :: Parser HackInstruction
-AParser x
--}
+-- takes a Parser and runs it n times in a row.
+-- TODO: What is the meaning of running a parser zero times?
+parseN :: Int -> Parser a -> Parser [a]
+parseN 1 p = (:[]) <$> p
+parseN n p = (:) <$> p <*> parseN (n-1) p
+
+
 
 getIfTrue :: (Char -> Bool) -> Parser Char
 getIfTrue p = P (\s -> case s of
@@ -105,22 +109,24 @@ getIfTrue p = P (\s -> case s of
                                         then [(x, xs)]
                                         else [])
 
-getIfTrueN :: (Char -> Bool) -> Int -> Parser String
+getIfTrueN :: Int -> (Char -> Bool) -> Parser String
+getIfTrueN n p = parseN n $ getIfTrue p
+
+{-
 getIfTrueN p 1 = (\c -> [c]) <$> getIfTrue p
 getIfTrueN p n = (:) <$> (getIfTrue p) <*> (getIfTrueN p (n-1))
     where z = getIfTrue p
+-}
 
 
 getOneOfSet :: String -> Parser Char
 getOneOfSet cs = getIfTrue (`elem` cs)
 
+getC :: Char -> Parser Char
 getC x = getIfTrue (== x)
 
-
--- takes a Parser and runs it n times in a row.
-parseN :: Int -> Parser a -> Parser [a]
-parseN 1 p = (:[]) <$> p
-parseN n p = (:) <$> p <$> parseN (n-1) p
+getCN :: Int -> Char -> Parser String
+getCN n x = parseN n $ getC x
 
 
 getDigit :: Parser Char
@@ -137,13 +143,16 @@ getSymbol = (:) <$> getNonDigit <*> many getSymbolChar
 getConstant = many getDigit
 
 -- same as regex's ".*". It matches any string.
-getDot = P (\s -> case s of
-    [] -> []
-    (x:xs) -> [(x, xs)])
+getDot :: Parser Char
+getDot = getIfTrue (const True)
 
+getDotStar :: Parser String
 getDotStar = many getDot
 
 
-getComment = (:) <$> (f <$> getSlash <*> getSlash) <*> (many getDotStar)
+getComment = (++) <$> (getCN 2 '/') <*> getDotStar
     where f s t = s:t:""
-          getSlash = getC '/'
+
+
+parseACmd :: Parser HackInstruction
+parseACmd = A <$> (getC '@' *> (getSymbol <|> getConstant))

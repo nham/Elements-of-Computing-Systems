@@ -2,9 +2,6 @@ import qualified Data.Map as Map
 import Control.Applicative
 
 -- lookups
-dests = Map.fromList [("null", "000"), ("M", "001"), ("D", "010"), ("MD", "011"),
-                      ("A", "100"), ("AM", "101"), ("AD", "110"), ("AMD", "111")]
-
 comps = Map.fromList [("0", "0101010"), ("1", "0111111"), ("-1", "0111010"),
                       ("D", "0001100"), ("A", "0110000"), ("M", "1110000"),
                       ("!D", "0001101"), ("!A", "0110001"), ("!M", "1110001"),
@@ -112,12 +109,6 @@ getIfTrue p = P (\s -> case s of
 getIfTrueN :: Int -> (Char -> Bool) -> Parser String
 getIfTrueN n p = parseN n $ getIfTrue p
 
-{-
-getIfTrueN p 1 = (\c -> [c]) <$> getIfTrue p
-getIfTrueN p n = (:) <$> (getIfTrue p) <*> (getIfTrueN p (n-1))
-    where z = getIfTrue p
--}
-
 
 getOneOfSet :: String -> Parser Char
 getOneOfSet cs = getIfTrue (`elem` cs)
@@ -127,6 +118,13 @@ getC x = getIfTrue (== x)
 
 getCN :: Int -> Char -> Parser String
 getCN n x = parseN n $ getC x
+
+getNothing :: Parser String
+getNothing = P (\s -> [("", s)])
+
+getString :: String -> Parser String
+getString [] = getNothing
+getString (x:xs) = (:) <$> getC x <*> getString xs
 
 
 getDigit :: Parser Char
@@ -154,5 +152,28 @@ getComment = (++) <$> (getCN 2 '/') <*> getDotStar
     where f s t = s:t:""
 
 
-parseACmd :: Parser HackInstruction
-parseACmd = A <$> (getC '@' *> (getSymbol <|> getConstant))
+parseACmd :: Parser String
+parseACmd = getC '@' *> (getSymbol <|> getConstant)
+
+parseDest :: Parser String
+dests = Map.fromList [("null", "000"), ("M", "001"), ("D", "010"), ("MD", "011"),
+                      ("A", "100"), ("AM", "101"), ("AD", "110"), ("AMD", "111")]
+parseDest = (const "001" <$> getString "M") 
+        <|> (const "010" <$> getString "D") 
+        <|> (const "011" <$> getString "MD")
+        <|> (const "100" <$> getString "A")
+        <|> (const "101" <$> getString "AM")
+        <|> (const "110" <$> getString "AD")
+        <|> (const "111" <$> getString "AMD")
+
+
+parseCCmd :: Parser (String, String, String)
+parseCCmd = undefined
+
+-- is it valid to assume that the correct parse is in the first position?
+parseLine :: String -> Either String HackInstruction
+parseLine input = case unP parseACmd input of
+                    ((x,""):xs) -> Right (A x)
+                    _ -> case unP parseCCmd input of
+                            (((d,c,j), ""):xs) -> Right (C d c j)
+                            _ -> Left "Can't parse as A or C."
